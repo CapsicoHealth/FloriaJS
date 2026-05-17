@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContentExplorer — Demo</title>
+  <link rel="stylesheet" href="../module-content-explorer.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #eef0f5;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin: 0 0 4px 0;
+      font-size: 1.5rem;
+      color: #1a1f36;
+    }
+    .subtitle {
+      margin: 0 0 20px 0;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+
+    /* ── Two-panel layout: two explorer instances side by side ─────── */
+    .demo-panels {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .demo-panel {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #4f46e5;
+    }
+
+    /* Each explorer lives in a fixed-height white card */
+    .explorer-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      overflow: hidden;
+      height: 480px;
+    }
+
+    /* The host div must fill the card */
+    .explorer-card > div {
+      height: 100%;
+    }
+
+    /* ── Event log ──────────────────────────────────────────────────── */
+    .log-card {
+      background: #1e1e2e;
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: #cdd6f4;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      height: 180px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #45475a transparent;
+    }
+    .log-card::-webkit-scrollbar { width: 5px; }
+    .log-card::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+
+    .log-entry { margin: 2px 0; line-height: 1.5; }
+    .log-entry .ts  { color: #6c7086; }
+    .log-entry .ev  { color: #a6e3a1; font-weight: 600; }
+    .log-entry .arg { color: #fab387; }
+
+    /* ── Content card rendered by onContentRender ───────────────────── */
+    .content-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+    }
+    .content-card-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: #ede9fe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #4f46e5;
+    }
+    .content-card-body { flex: 1; min-width: 0; }
+    .content-card-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #1f2937;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .content-card-meta {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+    .content-card-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #ddd6fe;
+      color: #4f46e5;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>ContentExplorer — Demo</h1>
+<p class="subtitle">
+  Two independent instances on the same page. Right-click a folder or content item to see the context menu.
+  Click a folder to drill in; use the ← Back button to return.
+</p>
+
+<div class="demo-panels">
+
+  <!-- ── Instance 1: custom folder icon (image-style SVG) ─────────── -->
+  <div class="demo-panel">
+    <span class="panel-label">Instance A — Research Projects</span>
+    <div class="explorer-card">
+      <div id="EXPLORER_A"></div>
+    </div>
+  </div>
+
+  <!-- ── Instance 2: default folder icon ──────────────────────────── -->
+  <div class="demo-panel">
+    <span class="panel-label">Instance B — Document Library</span>
+    <div class="explorer-card">
+      <div id="EXPLORER_B"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Event log shared by both instances ───────────────────────────── -->
+<div style="margin-top:20px;">
+  <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#4f46e5;margin-bottom:8px;">
+    Event Log
+  </div>
+  <div class="log-card" id="EVENT_LOG">
+    <div class="log-entry"><span class="ts">—</span> Waiting for interactions…</div>
+  </div>
+</div>
+
+
+<script type="module">
+import { ContentExplorer } from '../module-content-explorer.js';
+
+// ── Shared event logger ────────────────────────────────────────────────────
+function log(event, ...args) {
+  const logEl = document.getElementById('EVENT_LOG');
+  const now   = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML =
+    `<span class="ts">[${now}]</span> `
+    + `<span class="ev">${event}</span> `
+    + args.map(a => `<span class="arg">${JSON.stringify(a)}</span>`).join(' ');
+  logEl.prepend(entry);   // newest on top
+}
+
+// ── Dummy delay helper (simulates async server round-trip) ─────────────────
+const delay = (ms = 120) => new Promise(r => setTimeout(r, ms));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INSTANCE A — Research Projects
+// ═══════════════════════════════════════════════════════════════════════════
+
+const foldersA = [
+  { refnum: 'FA1', title: 'Oncology Trials Q1 2026',    lastUpdated: '2026-03-10', lastUpdatorId: 'u1' },
+  { refnum: 'FA2', title: 'Cardiology Research',         lastUpdated: '2026-02-28', lastUpdatorId: 'u2' },
+  { refnum: 'FA3', title: 'Drug Interaction Studies',    lastUpdated: '2026-03-01', lastUpdatorId: 'u1' },
+  { refnum: 'FA4', title: 'Genomics & Biomarkers',       lastUpdated: '2026-01-15', lastUpdatorId: 'u3' },
+  { refnum: 'FA5', title: 'Patient Cohort Definitions',  lastUpdated: '2026-03-12', lastUpdatorId: 'u2' },
+];
+const trashedFoldersA = [];  // folders moved to trash by onDelete
+
+// Each folder has its own set of content items
+const contentsA = {
+  FA1: [
+    { refnum: 'CA1_1', title: 'Phase II Enrollment Report',  type: 'Report',   updated: 'Mar 10' },
+    { refnum: 'CA1_2', title: 'Adverse Events Summary',      type: 'Summary',  updated: 'Mar 09' },
+    { refnum: 'CA1_3', title: 'Protocol Amendment v3',       type: 'Document', updated: 'Feb 28' },
+  ],
+  FA2: [
+    { refnum: 'CA2_1', title: 'Statin Efficacy Meta-Analysis', type: 'Analysis', updated: 'Feb 25' },
+    { refnum: 'CA2_2', title: 'ASCVD Risk Model Notes',        type: 'Notes',    updated: 'Feb 20' },
+    { refnum: 'CA2_3', title: 'Echo Dataset — 2025 Cohort',    type: 'Dataset',  updated: 'Jan 30' },
+  ],
+  FA3: [
+    { refnum: 'CA3_1', title: 'Warfarin + Antibiotics Review', type: 'Review',   updated: 'Mar 01' },
+    { refnum: 'CA3_2', title: 'CYP450 Interaction Matrix',     type: 'Dataset',  updated: 'Feb 18' },
+    { refnum: 'CA3_3', title: 'FDA DDI Guidance Notes',        type: 'Notes',    updated: 'Jan 22' },
+  ],
+  FA4: [
+    { refnum: 'CA4_1', title: 'SNP Annotation Pipeline',       type: 'Pipeline', updated: 'Jan 14' },
+    { refnum: 'CA4_2', title: 'Biomarker Panel v2',            type: 'Report',   updated: 'Jan 10' },
+    { refnum: 'CA4_3', title: 'GWAS Summary Statistics',       type: 'Dataset',  updated: 'Dec 30' },
+  ],
+  FA5: [
+    { refnum: 'CA5_1', title: 'Diabetes Cohort — ICD Filter',  type: 'Cohort',   updated: 'Mar 12' },
+    { refnum: 'CA5_2', title: 'HF Readmission Cohort',         type: 'Cohort',   updated: 'Mar 08' },
+    { refnum: 'CA5_3', title: 'Pediatric Asthma Population',   type: 'Cohort',   updated: 'Feb 14' },
+  ],
+};
+// Trashed content items per folder
+const trashedContentsA = { FA1:[], FA2:[], FA3:[], FA4:[], FA5:[] };
+
+const ICON_DOC = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+  <polyline points="14 2 14 8 20 8"/>
+</svg>`;
+
+const pluginA = {
+  // Custom folder icon — a purple-tinted folder with a stethoscope hint
+  icon: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52"
+              viewBox="0 0 24 24" fill="none" stroke="#7c3aed"
+              stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+           <circle cx="12" cy="14" r="2.5" stroke="#7c3aed" stroke-width="1.2"/>
+           <path d="M14.5 14a4 4 0 0 0 3.5 4" stroke="#7c3aed" stroke-width="1.2"/>
+         </svg>`,
+
+  async onList({ filter, orderBy, trashcan }) {
+    await delay();
+    log('onList', { filter, orderBy, trashcan });
+    let list = trashcan ? [...trashedFoldersA] : [...foldersA];
+    if (filter) list = list.filter(f => f.title.toLowerCase().includes(filter.toLowerCase()));
+    if (orderBy === 'recent') list.sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
+    else                      list.sort((a, b) => a.title.localeCompare(b.title));
+    return list;
+  },
+
+  async onAdd() {
+    log('onAdd — (demo: no-op, would open a create dialog)');
+    // In a real implementation you'd open a dialog here; we just log it.
+  },
+
+  async onDelete(refnum) {
+    await delay();
+    log('onDelete', refnum);
+    const idx = foldersA.findIndex(f => f.refnum === refnum);
+    if (idx !== -1) trashedFoldersA.push(...foldersA.splice(idx, 1));
+  },
+
+  async onRename(refnum, newTitle) {
+    await delay();
+    log('onRename', { refnum, newTitle });
+    const f = [...foldersA, ...trashedFoldersA].find(f => f.refnum === refnum);
+    if (f) f.title = newTitle;
+  },
+
+  async onRestore(refnum) {
+    await delay();
+    log('onRestore', refnum);
+    const idx = trashedFoldersA.findIndex(f => f.refnum === refnum);
+    if (idx !== -1) foldersA.push(...trashedFoldersA.splice(idx, 1));
+  },
+
+  async onContentList(folderRefnum, { trashcan } = {}) {
+    await delay();
+    log('onContentList', { folderRefnum, trashcan });
+    return trashcan
+      ? [...(trashedContentsA[folderRefnum] || [])]
+      : [...(contentsA[folderRefnum]        || [])];
+  },
+
+  onContentRender(item) {
+    return `
+      <div class="content-card">
+        <div class="content-card-icon">${ICON_DOC}</div>
+        <div class="content-card-body">
+          <div class="content-card-title">${item.title}</div>
+          <div class="content-card-meta">Last updated: ${item.updated}</div>
+        </div>
+        <span class="content-card-badge">${item.type}</span>
+      </div>`;
+  },
+
+  async onContentDelete(refnum) {
+    await delay();
+    log('onContentDelete', refnum);
+    for (const key of Object.keys(contentsA)) {
+      const idx = contentsA[key].findIndex(c => c.refnum === refnum);
+      if (idx !== -1) {
+        trashedContentsA[key] = trashedContentsA[key] || [];
+        trashedContentsA[key].push(...contentsA[key].splice(idx, 1));
+        break;
+      }
+    }
+  },
+
+  async onContentRestore(refnum) {
+    await delay();
+    log('onContentRestore', refnum);
+    for (const key of Object.keys(trashedContentsA)) {
+      const idx = (trashedContentsA[key] || []).findIndex(c => c.refnum === refnum);
+      if (idx !== -1) {
+        contentsA[key] = contentsA[key] || [];
+        contentsA[key].push(...trashedContentsA[key].splice(idx, 1));
+        break;
+      }
+    }
+  },
+
+  async onContentRename(refnum, newTitle) {
+    await delay();
+    log('onContentRename', { refnum, newTitle });
+    for (const key of Object.keys(contentsA)) {
+      const item = contentsA[key].find(c => c.refnum === refnum);
+      if (item) { item.title = newTitle; break; }
+    }
+  },
+
+  onContentSelect(item) {
+    log('onContentSelect', { refnum: item.refnum, title: item.title });
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INSTANCE B — Document Library (default icon, different data set)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const foldersB = [
+  { refnum: 'FB1', title: 'Clinical Guidelines 2025',   lastUpdated: '2026-03-11', lastUpdatorId: 'u4' },
+  { refnum: 'FB2', title: 'Regulatory Submissions',      lastUpdated: '2026-02-14', lastUpdatorId: 'u5' },
+  { refnum: 'FB3', title: 'Training & SOPs',             lastUpdated: '2026-01-20', lastUpdatorId: 'u4' },
+  { refnum: 'FB4', title: 'Meeting Minutes — 2026',      lastUpdated: '2026-03-05', lastUpdatorId: 'u6' },
+  { refnum: 'FB5', title: 'Budget & Finance Reports',    lastUpdated: '2025-12-31', lastUpdatorId: 'u5' },
+];
+const trashedFoldersB = [];  // folders moved to trash by onDelete
+
+const contentsB = {
+  FB1: [
+    { refnum: 'CB1_1', title: 'AHA Heart Failure Guidelines', tag: 'PDF',   updated: 'Mar 11' },
+    { refnum: 'CB1_2', title: 'Sepsis Management Protocol',   tag: 'DOCX',  updated: 'Feb 28' },
+    { refnum: 'CB1_3', title: 'Anticoagulation Pathway v4',   tag: 'PDF',   updated: 'Jan 15' },
+  ],
+  FB2: [
+    { refnum: 'CB2_1', title: 'IND Application — Drug X',     tag: 'PDF',   updated: 'Feb 10' },
+    { refnum: 'CB2_2', title: 'EMA Briefing Dossier',         tag: 'DOCX',  updated: 'Jan 30' },
+    { refnum: 'CB2_3', title: 'Post-Market Safety Report',    tag: 'XLSX',  updated: 'Dec 20' },
+  ],
+  FB3: [
+    { refnum: 'CB3_1', title: 'Onboarding SOP v6',            tag: 'PDF',   updated: 'Jan 18' },
+    { refnum: 'CB3_2', title: 'Good Clinical Practice 101',   tag: 'PPTX',  updated: 'Jan 12' },
+    { refnum: 'CB3_3', title: 'Data Privacy Training Slides', tag: 'PPTX',  updated: 'Nov 30' },
+  ],
+  FB4: [
+    { refnum: 'CB4_1', title: 'Steering Committee Mar 2026',  tag: 'DOCX',  updated: 'Mar 05' },
+    { refnum: 'CB4_2', title: 'Data Review Board Feb 2026',   tag: 'DOCX',  updated: 'Feb 22' },
+    { refnum: 'CB4_3', title: 'All-Hands Jan 2026 Notes',     tag: 'DOCX',  updated: 'Jan 31' },
+  ],
+  FB5: [
+    { refnum: 'CB5_1', title: 'Q4 2025 Budget Variance',      tag: 'XLSX',  updated: 'Dec 31' },
+    { refnum: 'CB5_2', title: 'FY2026 Forecast Model',        tag: 'XLSX',  updated: 'Dec 15' },
+    { refnum: 'CB5_3', title: 'Grant Expenditure Report',     tag: 'PDF',   updated: 'Nov 28' },
+  ],
+};
+const trashedContentsB = { FB1:[], FB2:[], FB3:[], FB4:[], FB5:[] };
+
+// Tag colour mapping
+const TAG_COLORS = {
+  PDF:  { bg: '#fee2e2', color: '#b91c1c' },
+  DOCX: { bg: '#dbeafe', color: '#1d4ed8' },
+  XLSX: { bg: '#d1fae5', color: '#065f46' },
+  PPTX: { bg: '#fef3c7', color: '#92400e' },
+};
+
+const ICON_FILE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="3" width="18" height="18" rx="3"/>
+  <line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/>
+  <line x1="8" y1="17" x2="12" y2="17"/>
+</svg>`;
+
+const pluginB = {
+  // No `icon` property → uses the built-in default folder SVG
+
+  async onList({ filter, orderBy, trashcan }) {
+    await delay();
+    log('B · onList', { filter, orderBy, trashcan });
+    let list = trashcan ? [...trashedFoldersB] : [...foldersB];
+    if (filter) list = list.filter(f => f.title.toLowerCase().includes(filter.toLowerCase()));
+    if (orderBy === 'recent') list.sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
+    else                      list.sort((a, b) => a.title.localeCompare(b.title));
+    return list;
+  },
+
+  async onAdd() {
+    log('B · onAdd — (demo: no-op)');
+  },
+
+  async onDelete(refnum) {
+    await delay();
+    log('B · onDelete', refnum);
+    const idx = foldersB.findIndex(f => f.refnum === refnum);
+    if (idx !== -1) trashedFoldersB.push(...foldersB.splice(idx, 1));
+  },
+
+  async onRename(refnum, newTitle) {
+    await delay();
+    log('B · onRename', { refnum, newTitle });
+    const f = [...foldersB, ...trashedFoldersB].find(f => f.refnum === refnum);
+    if (f) f.title = newTitle;
+  },
+
+  async onRestore(refnum) {
+    await delay();
+    log('B · onRestore', refnum);
+    const idx = trashedFoldersB.findIndex(f => f.refnum === refnum);
+    if (idx !== -1) foldersB.push(...trashedFoldersB.splice(idx, 1));
+  },
+
+  async onContentList(folderRefnum, { trashcan } = {}) {
+    await delay();
+    log('B · onContentList', { folderRefnum, trashcan });
+    return trashcan
+      ? [...(trashedContentsB[folderRefnum] || [])]
+      : [...(contentsB[folderRefnum]        || [])];
+  },
+
+  onContentRender(item) {
+    const tc = TAG_COLORS[item.tag] || { bg: '#f3f4f6', color: '#374151' };
+    const badgeStyle = `background:${tc.bg};color:${tc.color};`;
+    return `
+      <div class="content-card">
+        <div class="content-card-icon" style="background:#dbeafe;color:#1d4ed8;">${ICON_FILE}</div>
+        <div class="content-card-body">
+          <div class="content-card-title">${item.title}</div>
+          <div class="content-card-meta">Last updated: ${item.updated}</div>
+        </div>
+        <span class="content-card-badge" style="${badgeStyle}">${item.tag}</span>
+      </div>`;
+  },
+
+  async onContentDelete(refnum) {
+    await delay();
+    log('B · onContentDelete', refnum);
+    for (const key of Object.keys(contentsB)) {
+      const idx = contentsB[key].findIndex(c => c.refnum === refnum);
+      if (idx !== -1) {
+        trashedContentsB[key] = trashedContentsB[key] || [];
+        trashedContentsB[key].push(...contentsB[key].splice(idx, 1));
+        break;
+      }
+    }
+  },
+
+  async onContentRestore(refnum) {
+    await delay();
+    log('B · onContentRestore', refnum);
+    for (const key of Object.keys(trashedContentsB)) {
+      const idx = (trashedContentsB[key] || []).findIndex(c => c.refnum === refnum);
+      if (idx !== -1) {
+        contentsB[key] = contentsB[key] || [];
+        contentsB[key].push(...trashedContentsB[key].splice(idx, 1));
+        break;
+      }
+    }
+  },
+
+  async onContentRename(refnum, newTitle) {
+    await delay();
+    log('B · onContentRename', { refnum, newTitle });
+    for (const key of Object.keys(contentsB)) {
+      const item = contentsB[key].find(c => c.refnum === refnum);
+      if (item) { item.title = newTitle; break; }
+    }
+  },
+
+  onContentSelect(item) {
+    log('B · onContentSelect', { refnum: item.refnum, title: item.title });
+  },
+};
+
+
+// ── Mount both instances ───────────────────────────────────────────────────
+const explorerA = new ContentExplorer('EXPLORER_A', pluginA);
+explorerA.render();
+
+const explorerB = new ContentExplorer('EXPLORER_B', pluginB);
+explorerB.render();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conversation Visualizer - Complex Example</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    
+    #viz-container {
+      width: 100%;
+      height: 700px;
+      border: 1px solid #ddd;
+    }
+    
+    .info {
+      padding: 20px;
+      background: #f9f9f9;
+      border-top: 1px solid #ddd;
+    }
+    
+    .info h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    
+    .info ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    
+    .info li {
+      margin: 5px 0;
+      line-height: 1.6;
+    }
+    
+    .info code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Conversation Visualizer - Complex Example</h1>
+  <p class="subtitle">Multi-Agent Conversation with 3-Level Nesting (Coordinator → Medical → Cardiology + Billing → Insurance)</p>
+  
+  <div class="container">
+    <div id="viz-container"></div>
+    
+    <div class="info">
+      <h3>Complex Multi-Level Example</h3>
+      <p>This demonstrates a realistic complex conversation with <strong>3 levels of nesting and parallel agent calls</strong></p>
+      <ul>
+        <li><strong>Depth:</strong> 3 (Coordinator → Medical Agent → Cardiology Specialist)</li>
+        <li><strong>Total Agents:</strong> 5 (Coordinator, Medical, Cardiology, Billing, Insurance)</li>
+        <li><strong>Total Events:</strong> 15+ (tool calls + agent calls)</li>
+        <li><strong>Parallel Paths:</strong> Medical and Billing agents run in parallel</li>
+        <li><strong>Best View:</strong> Sankey Flow (auto-selected for depth ≤ 3)</li>
+      </ul>
+      
+      <h3>Visualization Controls:</h3>
+      <ul>
+        <li><strong>Flow View (→):</strong> Sankey-style flow diagram showing data movement through agents and tools</li>
+        <li><strong>Tree View (⊞):</strong> Collapsible hierarchical tree. Click nodes to expand/collapse branches</li>
+        <li><strong>Tree Controls Panel:</strong> In Tree view, use the control panel (top right) to:
+          <ul>
+            <li><strong>Node Spacing:</strong> Choose Compact (tight), Normal (default), or Spread (spacious)</li>
+            <li><strong>Expand All:</strong> Open all collapsed nodes at once</li>
+            <li><strong>Collapse All:</strong> Close all nodes to see just the top level</li>
+            <li><strong>Panel Toggle:</strong> Click the header to collapse/expand the control panel</li>
+          </ul>
+        </li>
+      </ul>
+      
+      <h3>Visual Encoding:</h3>
+      <ul>
+        <li><strong>Color:</strong> Heat map based on token usage (🟢 Green = low, 🟡 Yellow = medium, 🔴 Red = high)</li>
+        <li><strong>Size/Thickness:</strong> Proportional to total tokens (input + output)</li>
+        <li><strong>Hover:</strong> Shows detailed metadata (tokens, cost, model, provider)</li>
+      </ul>
+      
+      <h3>Usage Example:</h3>
+      <ul>
+        <li>Import: <code>import { createConversationVisualizer } from './module-chat-widget-convo.js';</code></li>
+        <li>Initialize: <code>const viz = createConversationVisualizer('containerId', conversationData);</code></li>
+        <li>The visualizer automatically selects the best default view based on conversation depth</li>
+        <li>Users can toggle between views using the control buttons</li>
+        <li><strong>Compare:</strong> Open <a href="module-chat-widget-convo-test.html">test.html</a> for a simple single-agent example</li>
+      </ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createTreeView } from '/static/floria.v2.0/module-charts2-treeview.js';
+
+    // Complex nested conversation with multiple agents and tool calls
+    const complexData = {
+      "conversation": {
+        "agent": {
+          "id": "coord-001",
+          "model": "gpt-4",
+          "provider": "OpenAI",
+          "title": "Coordinator Agent"
+        },
+        "events": [
+          {
+            "name": "discover_agents",
+            "parameters": {},
+            "type": "tool_call"
+          },
+          {
+            "name": "analyze_intent",
+            "parameters": {},
+            "type": "tool_call"
+          },
+          {
+            "conversation": {
+              "agent": {
+                "id": "medical-001",
+                "model": "claude-3-opus",
+                "provider": "Anthropic",
+                "title": "Medical Knowledge Agent"
+              },
+              "events": [
+                {
+                  "name": "search_medical_codes",
+                  "type": "tool_call"
+                },
+                {
+                  "name": "validate_codes",
+                  "type": "tool_call"
+                },
+                {
+                  "conversation": {
+                    "agent": {
+                      "id": "specialist-001",
+                      "model": "gpt-4-turbo",
+                      "provider": "OpenAI",
+                      "title": "Cardiology Specialist"
+                    },
+                    "events": [
+                      {
+                        "name": "query_cardiology_db",
+                        "type": "tool_call"
+                      },
+                      {
+                        "name": "cross_reference_guidelines",
+                        "type": "tool_call"
+                      }
+                    ],
+                    "id": "conv-specialist-001",
+                    "prompt": "Provide detailed cardiology codes for heart failure diagnosis",
+                    "response": "Found 15 relevant ICD-10 codes for heart failure...",
+                    "usage": {
+                      "estimated_cost": 0.0032,
+                      "input_tokens": 5200,
+                      "output_tokens": 180,
+                      "total_tokens": 5380
+                    }
+                  },
+                  "name": "Cardiology Specialist",
+                  "type": "agent_call"
+                },
+                {
+                  "name": "format_results",
+                  "type": "tool_call"
+                },
+                {
+                  "name": "generate_csv",
+                  "type": "tool_call"
+                }
+              ],
+              "id": "conv-medical-001",
+              "prompt": "Provide comprehensive DRG and ICD codes for heart failure",
+              "response": "Compiled comprehensive list of heart failure codes...",
+              "usage": {
+                "estimated_cost": 0.0067,
+                "input_tokens": 12500,
+                "output_tokens": 420,
+                "total_tokens": 12920
+              }
+            },
+            "name": "Medical Knowledge Agent",
+            "type": "agent_call"
+          },
+          {
+            "conversation": {
+              "agent": {
+                "id": "billing-001",
+                "model": "gemini-pro",
+                "provider": "Google",
+                "title": "Billing Analysis Agent"
+              },
+              "events": [
+                {
+                  "name": "calculate_reimbursement",
+                  "type": "tool_call"
+                },
+                {
+                  "name": "check_coverage",
+                  "type": "tool_call"
+                },
+                {
+                  "conversation": {
+                    "agent": {
+                      "id": "insurance-001",
+                      "model": "claude-3-sonnet",
+                      "provider": "Anthropic",
+                      "title": "Insurance Policy Agent"
+                    },
+                    "events": [
+                      {
+                        "name": "query_policy_database",
+                        "type": "tool_call"
+                      },
+                      {
+                        "name": "check_exclusions",
+                        "type": "tool_call"
+                      }
+                    ],
+                    "id": "conv-insurance-001",
+                    "prompt": "Check insurance coverage for these DRG codes",
+                    "response": "Coverage analysis for all codes provided...",
+                    "usage": {
+                      "estimated_cost": 0.0028,
+                      "input_tokens": 4800,
+                      "output_tokens": 150,
+                      "total_tokens": 4950
+                    }
+                  },
+                  "name": "Insurance Policy Agent",
+                  "type": "agent_call"
+                }
+              ],
+              "id": "conv-billing-001",
+              "prompt": "Analyze billing implications and insurance coverage",
+              "response": "Complete billing analysis with reimbursement estimates...",
+              "usage": {
+                "estimated_cost": 0.0045,
+                "input_tokens": 8200,
+                "output_tokens": 280,
+                "total_tokens": 8480
+              }
+            },
+            "name": "Billing Analysis Agent",
+            "type": "agent_call"
+          },
+          {
+            "name": "synthesize_results",
+            "type": "tool_call"
+          },
+          {
+            "name": "format_final_report",
+            "type": "tool_call"
+          }
+        ],
+        "id": "conv-root",
+        "prompt": "What are the DRG codes for heart failure and what do they cost?",
+        "response": "Comprehensive analysis of heart failure DRG codes with billing...",
+        "usage": {
+          "estimated_cost": 0.0185,
+          "input_tokens": 28000,
+          "output_tokens": 850,
+          "total_tokens": 28850
+        }
+      },
+      "execution_time_ms": 45320
+    };
+
+    // Create visualizer
+    const visualizer = createTreeView('viz-container', complexData);
+    
+    // Make it available for debugging
+    window.visualizer = visualizer;
+
+    console.log('Complex Conversation TreeView initialized');
+    console.log('Conversation depth:', visualizer.depth);
+    console.log('Default view:', visualizer.defaultView);
+    console.log('Total execution time:', complexData.execution_time_ms + 'ms');
+    console.log('Total cost: $' + complexData.conversation.usage.estimated_cost.toFixed(4));
+  </script>
+</body>
+</html>

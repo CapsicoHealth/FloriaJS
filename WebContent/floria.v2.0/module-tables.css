@@ -1,0 +1,250 @@
+/* ===========================================================================
+ * Copyright (C) 2025 CapsicoHealth Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ============================================================
+   module-tables.css
+   Styles for FloriaTable – a fixed-header, sortable, filterable
+   table component.
+   All rules are scoped under .ftbl-root so multiple instances
+   on the same page never collide.
+   ============================================================ */
+
+/* ── Root container ─────────────────────────────────────────────────────── */
+.ftbl-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #1a1f36;
+  box-sizing: border-box;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.07), 0 4px 14px rgba(79, 70, 229, 0.05);
+  background: #fff;
+}
+
+.ftbl-root *, .ftbl-root *::before, .ftbl-root *::after {
+  box-sizing: border-box;
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────────────── */
+.ftbl-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  /*! border-bottom: 1px solid #e5e7eb; */
+  border-radius: 0.75rem 0.75rem 0 0;
+  flex-shrink: 0;
+}
+
+.ftbl-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 13px;
+  outline: none;
+  background: #f9fafb;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ftbl-filter-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.10);
+  background: #fff;
+}
+
+.ftbl-filter-count {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Scrollable body wrapper ────────────────────────────────────────────── */
+.ftbl-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: auto;
+  border-radius: 0.5rem;  /* clip the last row's corners to match the card */
+  border: 1px solid #EEE;
+  box-shadow: 0 1px 3px hsl(274 100% 23% / 0.06), 0 4px 12px hsl(274 100% 23% / 0.04);
+}
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.ftbl-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+/* Fixed layout for normal (non-wide) tables — makes min/max-width on cells
+   reliable and ensures clip columns receive their fair share of space. */
+.ftbl-table.ftbl-layout-fixed {
+  table-layout: fixed;
+}
+
+/* ── Head ───────────────────────────────────────────────────────────────── */
+.ftbl-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ftbl-table thead th {
+  padding: 10px 12px;
+  background: var(--header-color);
+  border-bottom: 1px solid #ddd6fe;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--header-text-color);
+  white-space: normal;
+  user-select: none;
+  vertical-align: top;
+}
+
+/* Each line segment emitted by _ftEsc() stays on one line;
+   only the explicit <br> between segments forces a break. */
+.ftbl-th-inner > span[style] {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.ftbl-table thead th.ftbl-sortable {
+  cursor: pointer;
+}
+.ftbl-table thead th.ftbl-sortable:hover {
+  background: var(--header-color-hover);
+  color: #4f46e5;
+}
+.ftbl-table thead th.ftbl-sortable:hover .ftbl-sort-icon {
+  opacity: 1;
+}
+
+/* Sort icon inline with header label */
+.ftbl-th-inner {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* For right-aligned sortable headers, flip the icon to the LEFT of the label
+   so the label's right edge stays flush with the right-aligned data below. */
+.ftbl-align-right .ftbl-th-inner {
+  flex-direction: row-reverse;
+}
+
+/* Text portion of the header — white-space:normal lets <br> work inside it
+   while each line segment stays nowrap via its own inline-block span. */
+.ftbl-th-label {
+  display: inline-block;
+  white-space: normal;
+}
+
+.ftbl-sort-icon {
+  flex-shrink: 0;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+  font-size: 1em;
+  line-height: 1.25;
+}
+
+th.ftbl-sort-asc  .ftbl-sort-icon,
+th.ftbl-sort-desc .ftbl-sort-icon {
+  opacity: 1;
+  color: #4f46e5;
+}
+
+/* ── Body rows ──────────────────────────────────────────────────────────── */
+.ftbl-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.12s;
+}
+
+.ftbl-table tbody tr:hover {
+  background: rgba(79, 70, 229, 0.04);
+}
+
+.ftbl-table tbody td {
+  padding: 9px 12px;
+  vertical-align: top;
+  color: #374151;
+  font-size: 1.05rem;
+}
+
+/* Alignment helpers applied to both th and td */
+.ftbl-align-left   { text-align: left; }
+.ftbl-align-right  { text-align: right; }
+.ftbl-align-center { text-align: center; }
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.ftbl-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* ── Boolean cell ───────────────────────────────────────────────────────── */
+.ftbl-bool-true  { color: #16a34a; font-size: 15px; }
+.ftbl-bool-false { color: #dc2626; font-size: 15px; }
+
+/* ── Wide-table (horizontal scroll) ────────────────────────────────────── */
+.ftbl-body.ftbl-wide {
+  overflow-x: auto;
+}
+
+.ftbl-body.ftbl-wide .ftbl-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* ── Text-wrap behaviour ────────────────────────────────────────────────── */
+
+/* clip: single line, truncate with ellipsis — default for string / string-ml */
+td.ftbl-wrap-clip,
+th.ftbl-wrap-clip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* wrap: normal word-wrap */
+td.ftbl-wrap-wrap,
+th.ftbl-wrap-wrap {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+}
+
+/* pre: preserve whitespace and newlines (pre-wrap) */
+td.ftbl-wrap-pre,
+th.ftbl-wrap-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: visible;
+}
+
+/* Legacy alias — kept for any existing markup */
+td.ftbl-multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

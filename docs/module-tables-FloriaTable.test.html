@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FloriaTable — Test &amp; Demo</title>
+  <link rel="stylesheet" href="../module-tables.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1f36;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Page header ────────────────────────────────────────────────── */
+    .page-header {
+      background: #4f46e5;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .page-header h1 { font-size: 20px; font-weight: 700; }
+    .page-header small { font-size: 12px; opacity: 0.75; margin-left: 12px; }
+
+    /* ── Tab bar ────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: #fff;
+      border-bottom: 1px solid #e1e4e8;
+      padding: 0 24px;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 10px 18px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #6b7280;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover  { color: #4f46e5; }
+    .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
+    /* ── Main content ───────────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; padding: 20px 24px; gap: 16px; min-height: 0; overflow: hidden; }
+
+    /* Tab panes */
+    .tab-pane { display: none; flex: 1; flex-direction: column; min-height: 0; gap: 12px; overflow: hidden; }
+    .tab-pane.active { display: flex; }
+
+    /* ── Control bar ────────────────────────────────────────────────── */
+    .ctrl-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #fff;
+      border: 1px solid #e1e4e8;
+      border-radius: 8px;
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
+    .ctrl-bar label { font-size: 13px; font-weight: 500; color: #374151; }
+    .ctrl-bar select, .ctrl-bar input[type=number] {
+      padding: 4px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .ctrl-btn {
+      padding: 6px 14px;
+      border: 1px solid #4f46e5;
+      border-radius: 6px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .ctrl-btn:hover { background: #4338ca; }
+    .ctrl-btn.secondary {
+      background: #fff;
+      color: #4f46e5;
+    }
+    .ctrl-btn.secondary:hover { background: #ede9fe; }
+
+    /* ── Table host divs ────────────────────────────────────────────── */
+    .table-host {
+      flex: 1;
+      border: 1px solid #e1e4e8;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      min-height: 0;
+    }
+
+    /* ── Side-by-side layout for the "two tables" demo ─────────────── */
+    .two-col { display: flex; gap: 16px; flex: 1; min-height: 0; }
+    .two-col .table-host { flex: 1; }
+
+    /* ── Collapsible code snippet ───────────────────────────────────── */
+    .code-toggle {
+      flex-shrink: 0;
+    }
+    .code-toggle summary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #4f46e5;
+      user-select: none;
+      padding: 4px 0;
+      list-style: none;
+    }
+    .code-toggle summary::-webkit-details-marker { display: none; }
+    .code-toggle summary::before {
+      content: '▶';
+      font-size: 9px;
+      transition: transform 0.15s;
+    }
+    .code-toggle[open] summary::before { transform: rotate(90deg); }
+
+    .code-block {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow: auto;
+      max-height: 180px;
+      margin-top: 6px;
+    }
+    .code-block .kw  { color: #cba6f7; }
+    .code-block .str { color: #a6e3a1; }
+    .code-block .cm  { color: #6c7086; font-style: italic; }
+    .code-block .num { color: #fab387; }
+
+    /* ── Status badge ────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green { background: #dcfce7; color: #16a34a; }
+    .badge-red   { background: #fee2e2; color: #dc2626; }
+    .badge-blue  { background: #dbeafe; color: #1d4ed8; }
+  </style>
+</head>
+<body>
+
+<!-- ── Page header ───────────────────────────────────────────────────────── -->
+<div class="page-header">
+  <div>
+    <h1>FloriaTable <small>module-tables.js</small></h1>
+  </div>
+  <span style="font-size:12px;opacity:.75;">Test &amp; Demo page — March 2026</span>
+</div>
+
+<!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="demo1">Basic Demo</button>
+  <button class="tab-btn" data-tab="demo2">Custom Renderers</button>
+  <button class="tab-btn" data-tab="demo3">Large Dataset</button>
+  <button class="tab-btn" data-tab="demo4">No Filter / setData</button>
+  <button class="tab-btn" data-tab="demo5">Two Tables</button>
+  <button class="tab-btn" data-tab="demo6">Wide Table / Wrap</button>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- ══ TAB 1 – Basic demo ══════════════════════════════════════════════ -->
+  <div id="tab-demo1" class="tab-pane active">
+    <details class="code-toggle">
+      <summary>▸ Show constructor code</summary>
+      <pre class="code-block"><span class="cm">// All built-in types; wrap:'clip'+maxWidth on strings, wrap:'pre' on Notes</span>
+<span class="kw">const</span> columns = [
+  { field: <span class="str">'name'</span>,   label: <span class="str">'Name'</span>,         sortable: <span class="num">true</span>, type: <span class="str">'string'</span>,
+    maxWidth: <span class="str">'160px'</span> },                           <span class="cm">// clip default → ellipsis at 160px</span>
+  { field: <span class="str">'city'</span>,   label: <span class="str">'City'</span>,         sortable: <span class="num">true</span>, type: <span class="str">'string'</span>,
+    maxWidth: <span class="str">'140px'</span> },
+  { field: <span class="str">'dob'</span>,    label: <span class="str">'Date of Birth'</span>,               type: <span class="str">'date'</span>     },
+  { field: <span class="str">'score'</span>,  label: <span class="str">'Score'</span>,        sortable: <span class="num">true</span>, type: <span class="str">'number'</span>  },
+  { field: <span class="str">'active'</span>, label: <span class="str">'Active'</span>,       align: <span class="str">'center'</span>,  type: <span class="str">'boolean'</span> },
+  { field: <span class="str">'notes'</span>,  label: <span class="str">'Notes'</span>,                         type: <span class="str">'string-ml'</span>,
+    wrap: <span class="str">'pre'</span>, minWidth: <span class="str">'160px'</span>, maxWidth: <span class="str">'260px'</span> }  <span class="cm">// pre-wrap multi-line</span>
+];
+<span class="kw">const</span> t = <span class="kw">new</span> FloriaTable(<span class="str">'tbl1'</span>, columns, data);
+t.render();</pre>
+    </details>
+    <div id="tbl1" class="table-host"></div>
+  </div>
+
+  <!-- ══ TAB 2 – Custom renderers ═══════════════════════════════════════ -->
+  <div id="tab-demo2" class="tab-pane">
+    <details class="code-toggle">
+      <summary>▸ Show constructor code</summary>
+      <pre class="code-block"><span class="cm">// Mix of renderer strings and custom functions</span>
+<span class="kw">const</span> columns = [
+  { field: <span class="str">'drug'</span>,       label: <span class="str">'Drug'</span>,          sortable: <span class="num">true</span> },
+  { field: <span class="str">'ndc'</span>,        label: <span class="str">'NDC'</span>,           align: <span class="str">'center'</span> },
+  { field: <span class="str">'fillDate'</span>,   label: <span class="str">'Fill Date'</span>,     type: <span class="str">'date'</span>,     renderer: <span class="str">"date('long')"</span> },
+  { field: <span class="str">'cost'</span>,       label: <span class="str">'Cost ($)'</span>,      sortable: <span class="num">true</span>,  type: <span class="str">'number'</span>,  renderer: <span class="str">"number(2)"</span> },
+  { field: <span class="str">'qty'</span>,        label: <span class="str">'Qty'</span>,           sortable: <span class="num">true</span>,  type: <span class="str">'integer'</span> },
+  { field: <span class="str">'tier'</span>,       label: <span class="str">'Tier'</span>,          align: <span class="str">'center'</span>,
+    renderer: <span class="kw">function</span>(row) {
+      <span class="kw">const</span> colors = [<span class="str">''</span>, <span class="str">'#16a34a'</span>, <span class="str">'#d97706'</span>, <span class="str">'#dc2626'</span>];
+      <span class="kw">return</span> <span class="str">`&lt;span class="badge" style="background:#f3f4f6;color:${colors[row.tier]||'#333'}"&gt;T${row.tier}&lt;/span&gt;`</span>;
+    }
+  }
+];</pre>
+    </details>
+    <div id="tbl2" class="table-host"></div>
+  </div>
+
+  <!-- ══ TAB 3 – Large dataset ══════════════════════════════════════════ -->
+  <div id="tab-demo3" class="tab-pane">
+    <div class="ctrl-bar">
+      <label>Rows:</label>
+      <input id="rowCount" type="number" value="1000" min="10" max="5000" step="100" style="width:80px">
+      <button class="ctrl-btn" id="btnGenerate">Generate &amp; Render</button>
+      <span id="perfMsg" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+    </div>
+    <div id="tbl3" class="table-host"></div>
+  </div>
+
+  <!-- ══ TAB 4 – No filter / setData ═══════════════════════════════════ -->
+  <div id="tab-demo4" class="tab-pane">
+    <div class="ctrl-bar">
+      <span class="badge badge-blue">Filter disabled</span>
+      <button class="ctrl-btn" id="btnLoad1">Load Dataset A</button>
+      <button class="ctrl-btn secondary" id="btnLoad2">Load Dataset B</button>
+      <button class="ctrl-btn secondary" id="btnClear">Clear</button>
+    </div>
+    <div id="tbl4" class="table-host"></div>
+  </div>
+
+  <!-- ══ TAB 5 – Two tables on same page ════════════════════════════════ -->
+  <div id="tab-demo5" class="tab-pane">
+    <p style="font-size:12px;color:#6b7280;flex-shrink:0;">
+      Two independent <code>FloriaTable</code> instances share the page.
+      Filters and sort states are fully isolated.
+    </p>
+    <div class="two-col">
+      <div id="tbl5a" class="table-host"></div>
+      <div id="tbl5b" class="table-host"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 6 – Wide table / wrap modes ═══════════════════════════════ -->
+  <div id="tab-demo6" class="tab-pane">
+    <div class="ctrl-bar" style="flex-shrink:0;">
+      <span class="badge badge-blue">wideTable = true</span>
+      <span style="font-size:12px;color:#374151;">
+        Many columns → horizontal scroll.
+        <strong>Name</strong> clips at 140px · <strong>Notes</strong> pre-wraps · <strong>Memo</strong> word-wraps · numeric columns use default wrap.
+      </span>
+    </div>
+    <details class="code-toggle" style="flex-shrink:0;">
+      <summary>▸ Show constructor code</summary>
+      <pre class="code-block"><span class="cm">// wideTable=true — 5th constructor argument</span>
+<span class="kw">new</span> FloriaTable(<span class="str">'tbl6'</span>, [
+  { field: <span class="str">'id'</span>,       label: <span class="str">'#'</span>,          sortable: <span class="num">true</span>,  type: <span class="str">'integer'</span>, minWidth: <span class="str">'50px'</span>  },
+  { field: <span class="str">'name'</span>,     label: <span class="str">'Full Name'</span>,  sortable: <span class="num">true</span>,  type: <span class="str">'string'</span>,
+    wrap: <span class="str">'clip'</span>, minWidth: <span class="str">'120px'</span>, maxWidth: <span class="str">'140px'</span> },   <span class="cm">// clip + maxWidth</span>
+  { field: <span class="str">'city'</span>,     label: <span class="str">'City'</span>,       sortable: <span class="num">true</span>,  type: <span class="str">'string'</span>,
+    minWidth: <span class="str">'110px'</span>, maxWidth: <span class="str">'130px'</span> },                    <span class="cm">// clip default</span>
+  { field: <span class="str">'dob'</span>,      label: <span class="str">'DOB'</span>,        sortable: <span class="num">true</span>,  type: <span class="str">'date'</span>,    minWidth: <span class="str">'90px'</span>  },
+  { field: <span class="str">'score'</span>,    label: <span class="str">'Score'</span>,      sortable: <span class="num">true</span>,  type: <span class="str">'number'</span>,  renderer: <span class="str">"number(2)"</span>, minWidth: <span class="str">'70px'</span> },
+  { field: <span class="str">'active'</span>,   label: <span class="str">'Active'</span>,                    type: <span class="str">'boolean'</span>, align: <span class="str">'center'</span>, minWidth: <span class="str">'60px'</span> },
+  { field: <span class="str">'dept'</span>,     label: <span class="str">'Department'</span>, sortable: <span class="num">true</span>,  type: <span class="str">'string'</span>,
+    minWidth: <span class="str">'120px'</span>, maxWidth: <span class="str">'160px'</span> },
+  { field: <span class="str">'salary'</span>,   label: <span class="str">'Salary ($)'</span>, sortable: <span class="num">true</span>,  type: <span class="str">'number'</span>,  renderer: <span class="str">"number(2)"</span>, minWidth: <span class="str">'90px'</span> },
+  { field: <span class="str">'notes'</span>,    label: <span class="str">'Notes'</span>,                        type: <span class="str">'string-ml'</span>,
+    wrap: <span class="str">'pre'</span>, minWidth: <span class="str">'180px'</span>, maxWidth: <span class="str">'260px'</span> },       <span class="cm">// pre-wrap</span>
+  { field: <span class="str">'memo'</span>,     label: <span class="str">'Memo'</span>,                         type: <span class="str">'string'</span>,
+    wrap: <span class="str">'wrap'</span>, minWidth: <span class="str">'160px'</span>, maxWidth: <span class="str">'220px'</span> },       <span class="cm">// word-wrap</span>
+  { field: <span class="str">'startDate'</span>,label: <span class="str">'Start Date'</span>,sortable: <span class="num">true</span>,  type: <span class="str">'date'</span>,    minWidth: <span class="str">'90px'</span>  }
+], data, <span class="num">true</span>, <span class="num">true</span>)   <span class="cm">// enableFilter=true, wideTable=true</span>
+.render();</pre>
+    </details>
+    <div id="tbl6" class="table-host"></div>
+  </div>
+
+</div><!-- /main -->
+
+<script type="module">
+import { FloriaTable } from '../module-tables.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared data generators
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FIRST = ['Alice','Bob','Carol','Dan','Eve','Frank','Grace','Hank','Irene','Jack',
+               'Karen','Leo','Mia','Ned','Olivia','Pete','Quinn','Rosa','Sam','Tina'];
+const LAST  = ['Smith','Jones','Garcia','Brown','Lee','Clark','Hall','Allen','Young','King',
+               'Wright','Scott','Torres','Nguyen','Hill','Adams','Baker','Rivera','Mitchell','Carter'];
+const CITIES = ['New York','Los Angeles','Chicago','Houston','Phoenix','Philadelphia',
+                'San Antonio','San Diego','Dallas','San Jose','Austin','Jacksonville'];
+const DRUGS  = ['Metformin','Lisinopril','Atorvastatin','Amlodipine','Omeprazole',
+                'Levothyroxine','Metoprolol','Albuterol','Losartan','Gabapentin'];
+
+function rnd(arr)    { return arr[Math.floor(Math.random() * arr.length)]; }
+function rndInt(a,b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+function rndDate(y1, y2) {
+  var y = rndInt(y1, y2), m = rndInt(1,12), d = rndInt(1,28);
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function makePeople(n) {
+  return Array.from({length: n}, (_, i) => ({
+    id:     i + 1,
+    name:   rnd(FIRST) + ' ' + rnd(LAST),
+    city:   rnd(CITIES),
+    dob:    rndDate(1950, 2005),
+    score:  +(Math.random() * 100).toFixed(3),
+    active: Math.random() > 0.3,
+    notes:  Math.random() > 0.6 ? 'Follow-up\nrequired' : ''
+  }));
+}
+
+function makeDrugs(n) {
+  return Array.from({length: n}, (_, i) => ({
+    drug:     rnd(DRUGS),
+    ndc:      `${rndInt(10000,99999)}-${rndInt(100,999)}-${rndInt(10,99)}`,
+    fillDate: rndDate(2023, 2026),
+    cost:     +(Math.random() * 400 + 5).toFixed(4),
+    qty:      rndInt(10, 180),
+    tier:     rndInt(1, 3)
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 1 – Basic demo
+// ─────────────────────────────────────────────────────────────────────────────
+
+const t1 = new FloriaTable('tbl1', [
+  { field: 'name',   label: 'Name',          sortable: true,  type: 'string',   maxWidth: '160px' },
+  { field: 'city',   label: 'City',          sortable: true,  type: 'string',   maxWidth: '140px' },
+  { field: 'dob',    label: 'Date of Birth',                  type: 'date'     },
+  { field: 'score',  label: 'Score',         sortable: true,  type: 'number'   },
+  { field: 'active', label: 'Active',        align: 'center', type: 'boolean'  },
+  { field: 'notes',  label: 'Notes',                          type: 'string-ml',
+    wrap: 'pre', minWidth: '160px', maxWidth: '260px' }
+], makePeople(25));
+t1.render();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 2 – Custom renderers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const t2 = new FloriaTable('tbl2', [
+  { field: 'drug',     label: 'Drug',      sortable: true  },
+  { field: 'ndc',      label: 'NDC',       align: 'center' },
+  { field: 'fillDate', label: 'Fill Date', type: 'date',    renderer: "date('long')" },
+  { field: 'cost',     label: 'Cost ($)',  sortable: true,  type: 'number',  renderer: "number(2)" },
+  { field: 'qty',      label: 'Qty',       sortable: true,  type: 'integer' },
+  { field: 'tier',     label: 'Tier',      align: 'center',
+    renderer: function(row) {
+      const colors = ['', '#16a34a', '#d97706', '#dc2626'];
+      const bg     = ['', '#dcfce7', '#fef9c3', '#fee2e2'];
+      return `<span class="badge" style="background:${bg[row.tier]||'#f3f4f6'};color:${colors[row.tier]||'#333'}">T${row.tier}</span>`;
+    }
+  }
+], makeDrugs(30));
+t2.render();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 3 – Large dataset
+// ─────────────────────────────────────────────────────────────────────────────
+
+let t3 = null;
+const largeCols = [
+  { field: 'id',     label: '#',             sortable: true,  type: 'integer'  },
+  { field: 'name',   label: 'Name',          sortable: true,  type: 'string'   },
+  { field: 'city',   label: 'City',          sortable: true,  type: 'string'   },
+  { field: 'dob',    label: 'DOB',           sortable: true,  type: 'date'     },
+  { field: 'score',  label: 'Score',         sortable: true,  type: 'number',  renderer: "number(3)" },
+  { field: 'active', label: 'Active',        align: 'center', type: 'boolean'  }
+];
+
+function generateLarge() {
+  const n = parseInt(document.getElementById('rowCount').value, 10) || 1000;
+  const t0 = performance.now();
+  if (t3 === null) {
+    t3 = new FloriaTable('tbl3', largeCols, makePeople(n));
+    t3.render();
+  } else {
+    t3.setData(makePeople(n));
+  }
+  const ms = (performance.now() - t0).toFixed(1);
+  document.getElementById('perfMsg').textContent = `Rendered ${n} rows in ${ms} ms`;
+}
+
+document.getElementById('btnGenerate').addEventListener('click', generateLarge);
+generateLarge(); // auto-render on load
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 4 – No filter / setData
+// ─────────────────────────────────────────────────────────────────────────────
+
+const noFilterCols = [
+  { field: 'name',   label: 'Name',   sortable: true, type: 'string'  },
+  { field: 'city',   label: 'City',   sortable: true, type: 'string'  },
+  { field: 'score',  label: 'Score',  sortable: true, type: 'number', renderer: "number(1)" },
+  { field: 'active', label: 'Active', align: 'center', type: 'boolean' }
+];
+
+const dataA = makePeople(12);
+const dataB = makePeople(8);
+
+const t4 = new FloriaTable('tbl4', noFilterCols, dataA, false);
+t4.render();
+
+document.getElementById('btnLoad1').addEventListener('click', () => t4.setData(dataA));
+document.getElementById('btnLoad2').addEventListener('click', () => t4.setData(dataB));
+document.getElementById('btnClear').addEventListener('click', () => t4.setData([]));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 5 – Two tables on same page
+// ─────────────────────────────────────────────────────────────────────────────
+
+const t5a = new FloriaTable('tbl5a', [
+  { field: 'name',   label: 'Patient',  sortable: true, type: 'string'  },
+  { field: 'dob',    label: 'DOB',      sortable: true, type: 'date'    },
+  { field: 'score',  label: 'Risk',     sortable: true, type: 'number', renderer: "number(1)" },
+  { field: 'active', label: 'Enrolled', align: 'center', type: 'boolean' }
+], makePeople(15));
+t5a.render();
+
+const t5b = new FloriaTable('tbl5b', [
+  { field: 'drug',  label: 'Drug',     sortable: true },
+  { field: 'cost',  label: 'Cost ($)', sortable: true, type: 'number', renderer: "number(2)" },
+  { field: 'qty',   label: 'Qty',      sortable: true, type: 'integer' },
+  { field: 'tier',  label: 'Tier',     align: 'center',
+    renderer: row => `<span class="badge badge-blue">T${row.tier}</span>`
+  }
+], makeDrugs(15));
+t5b.render();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 6 – Wide table + wrap modes
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DEPTS = ['Engineering','Marketing','Finance','HR','Operations','Legal','Product','Design'];
+const MEMOS = [
+  'Pending annual review. Please schedule a meeting with the team lead before end of quarter.',
+  'No outstanding actions.',
+  'Flagged for compliance audit.',
+  'Remote work agreement on file.',
+  'Transition plan in progress — see internal tracker for details.',
+  ''
+];
+
+function makeWide(n) {
+  return Array.from({length: n}, (_, i) => ({
+    id:        i + 1,
+    name:      rnd(FIRST) + ' ' + rnd(LAST),
+    city:      rnd(CITIES),
+    dob:       rndDate(1960, 2000),
+    score:     +(Math.random() * 100).toFixed(3),
+    active:    Math.random() > 0.25,
+    dept:      rnd(DEPTS),
+    salary:    +(30000 + Math.random() * 120000).toFixed(2),
+    notes:     Math.random() > 0.5 ? 'Line 1\nLine 2\nLine 3' : '',
+    memo:      rnd(MEMOS),
+    startDate: rndDate(2010, 2024)
+  }));
+}
+
+const t6 = new FloriaTable('tbl6', [
+  { field: 'id',        label: '#',           sortable: true,  type: 'integer',  minWidth: '50px'  },
+  { field: 'name',      label: 'Full Name',   sortable: true,  type: 'string',
+    wrap: 'clip', minWidth: '120px', maxWidth: '140px' },
+  { field: 'city',      label: 'City',        sortable: true,  type: 'string',
+    minWidth: '110px', maxWidth: '130px' },
+  { field: 'dob',       label: 'DOB',         sortable: true,  type: 'date',     minWidth: '90px'  },
+  { field: 'score',     label: 'Score',       sortable: true,  type: 'number',   renderer: "number(2)", minWidth: '70px' },
+  { field: 'active',    label: 'Active',                       type: 'boolean',  align: 'center',  minWidth: '60px' },
+  { field: 'dept',      label: 'Department',  sortable: true,  type: 'string',
+    minWidth: '120px', maxWidth: '160px' },
+  { field: 'salary',    label: 'Salary ($)',  sortable: true,  type: 'number',   renderer: "number(2)", minWidth: '90px' },
+  { field: 'notes',     label: 'Notes',                        type: 'string-ml',
+    wrap: 'pre',  minWidth: '180px', maxWidth: '260px' },
+  { field: 'memo',      label: 'Memo',                         type: 'string',
+    wrap: 'wrap', minWidth: '160px', maxWidth: '220px' },
+  { field: 'startDate', label: 'Start Date',  sortable: true,  type: 'date',     minWidth: '90px'  }
+], makeWide(30), true, true);  // enableFilter=true, wideTable=true
+t6.render();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab switching
+// ─────────────────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
