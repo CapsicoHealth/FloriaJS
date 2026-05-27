@@ -299,7 +299,14 @@ export var FloriaDOM = {
        link.href = cssUrlHref;
        link.fetchPriority = "high";
        const anchor = document.getElementById(anchorId);
-       if (before == true)
+       if (anchor == null)
+        {
+          if (before == true)
+           document.head.prepend(link);
+          else
+           document.head.append(link);
+        }
+       else if (before == true)
         anchor.before(link);
        else
         anchor.after(link);
