@@ -25,8 +25,6 @@ import { FloriaText     } from "./module-text.js";
 import { FloriaControls } from "./module-controls.js";
 import { FloriaPayments } from "./module-payments.js";
 
-import { CapsicoTickets    } from "/static/js/admin/tickets.js";
-
 export var FloriaLogin = { };
 
 window.FloriaLogin = FloriaLogin;
@@ -348,11 +346,12 @@ FloriaLogin.PopupLogin = {
                               }
                              str+='</TABLE><BR><BR>';
                              FloriaDOM.setInnerHTML(cntId, str, null, 5);
-                             FloriaDOM.addEvent(cntId, "click", function(e, event, target) {
+                             FloriaDOM.addEvent(cntId, "click", async function(e, event, target) {
                                 target = FloriaDOM.getAncestorNode(target, "TR", "refnum");
                                 if (target == null)
                                  return;
                                 let t = data.getSE(target.dataset.refnum, "refnum");
+                                const CapsicoTickets = await import("/static/js/admin/tickets.js");
                                 CapsicoTickets.popup(t, function() { tabControl.select(2); });
                               }, null, true);
                           }, function() {
