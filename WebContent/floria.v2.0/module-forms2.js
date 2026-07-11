@@ -872,11 +872,18 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
         }, null, true);
       
       if (this._liveOnChange == true)
-        FloriaDOM.addEvent(this._elementId+'_F', "change", function(e, event, target)
-          {
-            that.updatePage(that._pageId, true);
-          }, null, true);
-
+       {
+//         console.log("FORM -> setting up form.onchange handler.")
+         FloriaDOM.addEvent(this._elementId+'_F', "change", function(e, event, target)
+           {
+             console.log("FORM -> onchange called.")
+             that.updatePage(that._pageId, true);
+           }, null, true);
+       }
+      else
+        {
+//          console.log("FORM -> onchange handler not set because _liveOnChange is not true.")            
+        }
       var Pickers = [];
       for (var i = 0; i < p.length; ++i)
        {
@@ -904,18 +911,22 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
    this.updatePage = function(toPageId, fieldChange, skipValidation=false)
     {
 //      console.log("\n-------------------------------------------------------------------------");
-//      console.log("updatePage START: _pickersLoading="+this._pickersLoading+"; toPageId: "+toPageId+"; this._pageId: "+this._pageId+"; this._data: ", this._data);
+//      console.log("FORMS -> updatePage START: _pickersLoading="+this._pickersLoading+"; toPageId: "+toPageId+"; this._pageId: "+this._pageId+"; this._data: ", this._data);
 //      console.trace();
       // Can't do anything until pickers are all loaded.
+      
       if (this._pickersLoading > 0)
        {
          var that = this;
          setTimeout(function() { that.updatePage(toPageId, fieldChange, skipValidation); }, 250);
+//         console.log(" ... FORMS -> Waiting for pickers still loading");
          return;
        }
-      
+
+//      console.log("FORMS -> updatePage start");
       if (this._pageId != null) // actually updating a form page's visual aspect/data
        {
+//         console.log("FORMS -> updating a form page's visual aspect/data");
          var p = this._formDefs[this._pageId];
          if (p != null)
           {
@@ -1044,16 +1055,28 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
                this.reactivateSubmit();
                return false;
              }
+//            console.log("FORMS -> Persisting data.");
             if (this._persistId != null)
              FloriaDOM.localStorageSet(this._persistId, this._data);
+//            console.log("FORMS -> Checking to call _processCallbackFunc.");
             if (this._processCallbackFunc != null)
-             this._processCallbackFunc(this._data, toPageId==null, fieldChange, MissingParams.length > 0);
+             {
+//               console.log("FORMS -> Calling _processCallbackFunc.");
+               this._processCallbackFunc(this._data, toPageId==null, fieldChange, MissingParams.length > 0);
+//               console.log("FORMS -> Called _processCallbackFunc.");
+             }
+            else
+             {
+//                console.log("FORMS -> No _processCallbackFunc defined.");
+             }
           }
-
          this.paintForm(toPageId);
        }
       else
-       this.paint(toPageId);
+       {
+//         console.log("this._pageId was null, so just repaiting: no onChange hanbdler called");
+         this.paint(toPageId);
+       }
 
 //      console.log("updatePage END: ", this._data);
       return true;
