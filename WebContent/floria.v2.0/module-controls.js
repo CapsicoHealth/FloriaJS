@@ -676,12 +676,23 @@ function ComboBox(divId, elementId, values, placeholder, defaultValue, onChangeF
        else
         inputElement.value = target.innerText;
        if (onChangeFunc != null)
-        onChangeFunc(valueElement, val);
+        {
+//          console.log("COMBO --> call onChangeFunc")
+          onChangeFunc(valueElement, val);
+        }
        else
         {
+//          console.log("COMBO --> call change on form if exists")
           let f = inputElement.closest("form");
           if (f != null)
-           FloriaDOM.fireEvent(f, "change");
+           {
+//             console.log("COMBO --> calling change on form")
+             FloriaDOM.fireEvent(f, "change");
+           }
+          else
+           {
+//             console.log("COMBO --> could not find nearest form, so no onchange called!!")
+           }
         }
     }, null, true);
     
