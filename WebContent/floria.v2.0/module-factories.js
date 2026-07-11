@@ -1159,6 +1159,8 @@ PickerRegistry.show = function(elementId, Inline)
    console.log("PickerRegistry.show: start");
 
    var picker = pickers[elementId];
+   if (picker == null)
+    return console.error("Cannot find picker with elementId '"+elementId+"'.");
    if (picker._internal.dlg != null && Inline != true)
     {
       var dim = picker._obj.getDimensionPercents();
