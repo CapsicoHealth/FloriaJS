@@ -45,6 +45,42 @@ FloriaCharts2.CHOROPLETH_TYPES = { "state" : "states"
 };
 
 
+// Tiny inline-SVG renderer for a dataset's Chart.js `pointStyle`, used by the custom
+// external tooltip below so a series with a non-default point shape (e.g. 'triangle',
+// 'star', 'rect', 'rectRot') keeps that shape visible in its tooltip swatch too, instead of
+// always falling back to a plain colored square/circle block. Any pointStyle not explicitly
+// handled here (including the default 'circle', and thin styles like 'cross'/'line'/'dash')
+// falls back to the original plain color block, so existing callers are unaffected.
+//
+// NOTE: fill/stroke are set via an inline `style="..."`, NOT plain `fill="..."`/`stroke="..."`
+// presentation attributes. SVG presentation attributes sit at the BOTTOM of the CSS cascade —
+// lower priority than even a bare element-type selector — so any page happening to define a
+// global rule like `rect { fill: transparent; }` (elsewhere in this codebase, left over from
+// unrelated D3 chart styling, this is a real, existing rule) would silently win over
+// `fill="..."` and make the shape invisible. Inline style always wins over a plain selector.
+const _POINTSTYLE_SVG_PATHS = {
+   rect    : (bg, bd) => `<rect x="1" y="1" width="10" height="10" style="fill:${bg};stroke:${bd};"/>`
+  ,rectRot : (bg, bd) => `<rect x="1.8" y="1.8" width="8.4" height="8.4" style="fill:${bg};stroke:${bd};" transform="rotate(45 6 6)"/>`
+  ,triangle: (bg, bd) => `<polygon points="6,1 11,10.5 1,10.5" style="fill:${bg};stroke:${bd};"/>`
+  ,star    : (bg, bd) => `<polygon points="6,0.5 7.35,4.14 11.23,4.3 8.19,6.71 9.23,10.45 6,8.3 2.77,10.45 3.81,6.71 0.77,4.3 4.65,4.14" style="fill:${bg};stroke:${bd};"/>`
+};
+function _pointStyleTooltipSwatchHTML(pointStyle, bg, bd)
+ {
+   // A dataset's pointStyle can also be an HTMLCanvasElement/HTMLImageElement (Chart.js
+   // supports this natively for the actual chart/legend point rendering — see drawPoint()/
+   // drawPointLegend() — as an escape hatch for shapes Chart.js can't draw natively, e.g. a
+   // TRUE filled star, since Chart.js's own 'star' pointStyle is just a stroked asterisk).
+   // Render that image verbatim (via its own data URL) so the tooltip swatch matches
+   // whatever custom shape is actually drawn on the chart/legend for that series.
+   if (pointStyle != null && typeof pointStyle.toDataURL === 'function')
+    return '<img src="'+pointStyle.toDataURL()+'" width="12" height="12" style="display:inline-block;vertical-align:middle;">';
+   let pathFunc = _POINTSTYLE_SVG_PATHS[pointStyle];
+   if (pathFunc == null)
+    return '<SPAN class="chartTooltipColorBlock" style="background-color:'+bg+'; border-color:'+bd+'"></SPAN>';
+   return '<svg width="12" height="12" viewBox="0 0 12 12" style="display:inline-block;vertical-align:middle;">'+pathFunc(bg, bd)+'</svg>';
+ }
+
+
 function tagDatasetChoroplethColor(dataset, quantiles)
  {
    let minValue = Number.MAX_SAFE_INTEGER;
@@ -481,6 +517,7 @@ FloriaCharts2.Chart = function(divId)
  {
    this._divId = divId;
    this._datasets = [];
+   this._datasetsByKey = {}; // opt-in keyed-dataset registry — see registerDataset()/buildScatterDataset() below
    this._title = null;
    this._xAxis = null;
    this._yAxis = null;
@@ -537,16 +574,21 @@ FloriaCharts2.Chart = function(divId)
       return this;
     }
 
-   this._addDataset=function(chartType, dataset
+   // Pure object construction — no registration into this._datasets. Extracted out of
+   // _addDataset (unchanged below) so the new opt-in keyed API (buildScatterDataset /
+   // registerDataset / setDatasetVisibility / reorderDatasets, further below) can construct
+   // and cache dataset objects externally without affecting existing addScatter/addBar/...
+   // behavior at all.
+   this._buildDatasetObject=function(chartType, dataset
                             ,labels /*labelFull, labelSimple*/
-                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius*/
+                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius, pointStyle*/
                             ,visualSpecsHover /*backgroundColor, backgroundColorFaded, borderColor, borderWidth, radius*/
                             ,yAxisID /*'y' (default) or 'y1' (secondary)*/
                             )
     {
       visualSpecs = FloriaDOM.mergeProperies(this._commonVisualSpecs, visualSpecs);
       visualSpecsHover = FloriaDOM.mergeProperies(this._commonVisualSpecsHover, visualSpecsHover);
-      dataset = { type: chartType
+      return { type: chartType
                  ,data: dataset
                  ,label: labels.labelFull, labelSimple: labels.labelSimple || labels.labelFull
                  ,yAxisID: yAxisID || 'y'
@@ -559,6 +601,12 @@ FloriaCharts2.Chart = function(divId)
                  ,borderColorFaded: visualSpecs.borderColorFaded
                  ,borderWidth: visualSpecs.borderWidth
                  ,radius: visualSpecs.radius
+                 // Optional per-dataset point shape (Chart.js pointStyle: 'circle', 'rect',
+                 // 'rectRot', 'triangle', 'star', ...) — a second, independent visual channel
+                 // callers can use (alongside color) to keep many concurrently-drawn small
+                 // series distinguishable. Left undefined (→ Chart.js default 'circle') when
+                 // not supplied, so existing callers are entirely unaffected.
+                 ,pointStyle: visualSpecs.pointStyle
                           
                  ,hoverBackgroundColor: visualSpecsHover.backgroundColor
                  ,hoverBackgroundColorInitial: visualSpecsHover.backgroundColor
@@ -570,10 +618,90 @@ FloriaCharts2.Chart = function(divId)
                  ,hoverRadius: visualSpecsHover.radius
                  ,hitRadius: visualSpecsHover.radius
                 };
-      this._datasets.push(dataset);
-      return dataset;
     }
-    
+
+   this._addDataset=function(chartType, dataset
+                            ,labels /*labelFull, labelSimple*/
+                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius*/
+                            ,visualSpecsHover /*backgroundColor, backgroundColorFaded, borderColor, borderWidth, radius*/
+                            ,yAxisID /*'y' (default) or 'y1' (secondary)*/
+                            )
+    {
+      let ds = this._buildDatasetObject(chartType, dataset, labels, visualSpecs, visualSpecsHover, yAxisID);
+      this._datasets.push(ds);
+      return ds;
+    }
+
+   ////////////////////////////////////////////////////////////////////////////////////////////
+   // Opt-in incremental / keyed dataset API (additive — does not alter any existing method's
+   // behavior; existing callers of addScatter/addBar/addLine/.../draw() are wholly unaffected).
+   //
+   // Purpose: on repeated draw() calls for the SAME chart (e.g. toggling a checkbox), Chart.js
+   // can only reuse its internal per-dataset parse/element/animation caches when the dataset
+   // OBJECT (and, ideally, its .data array) keeps the same identity across updates. Rebuilding
+   // brand-new dataset objects every render (as addScatter/addBar/etc. always do) defeats that
+   // and forces a full re-parse + re-resolve of every point on every update. These methods let a
+   // caller build a dataset once, cache the object itself externally (keyed by something stable
+   // like a record's refnum), and reuse/refresh/show/hide/reorder it across many draw() calls.
+   ////////////////////////////////////////////////////////////////////////////////////////////
+
+   /** Builds a 'bubble' (scatter) dataset object without registering it — caller owns/caches it. */
+   this.buildScatterDataset = function(dataset, labels, visualSpecs, visualSpecsHover)
+    {
+      return this._buildDatasetObject('bubble', dataset, labels, visualSpecs, visualSpecsHover);
+    }
+
+   /** Registers a (possibly externally-cached/reused) dataset object under `key` on THIS chart
+       instance, so it participates in the next draw()/reorderDatasets()/setDatasetVisibility(). */
+   this.registerDataset = function(key, ds)
+    {
+      this._datasetsByKey[key] = ds;
+      if (this._datasets.indexOf(ds) < 0)
+       this._datasets.push(ds);
+      return ds;
+    }
+
+   /** Cheaply shows/hides an already-registered dataset (by key) without rebuilding it.
+       Uses Chart.js's own setDatasetVisibility() on the live chart instance when one already
+       exists for this div, so previously-drawn datasets don't need a full rebuild just to be
+       hidden/shown again. */
+   this.setDatasetVisibility = function(key, visible)
+    {
+      let ds = this._datasetsByKey[key];
+      if (ds == null)
+       return this;
+      ds.hidden = !visible; // honored the first time this dataset object is ever parsed
+      let liveChart = CHART_REGISTRY[this._divId];
+      if (liveChart != null)
+       {
+         let idx = liveChart.data.datasets.indexOf(ds);
+         if (idx >= 0)
+          liveChart.setDatasetVisibility(idx, visible);
+       }
+      return this;
+    }
+
+   /** Reorders the datasets that will be handed to Chart.js on the next draw() call, matched by
+       key. Purely a z-order (and, incidentally, legend order) concern — does not change any
+       dataset's identity, content, or color. Any dataset not present in orderedKeys (e.g. added
+       via the classic addScatter/addBar/... calls) is appended at the end, preserving its
+       relative order, so mixed usage never silently drops a series. */
+   this.reorderDatasets = function(orderedKeys)
+    {
+      let ordered = [];
+      for (let i = 0; i < orderedKeys.length; ++i)
+       {
+         let ds = this._datasetsByKey[orderedKeys[i]];
+         if (ds != null && ordered.indexOf(ds) < 0)
+          ordered.push(ds);
+       }
+      for (let i = 0; i < this._datasets.length; ++i)
+       if (ordered.indexOf(this._datasets[i]) < 0)
+        ordered.push(this._datasets[i]);
+      this._datasets = ordered;
+      return this;
+    }
+
    this.addScatter=function(dataset
                            ,labels /*labelFull, labelSimple*/
                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius*/
@@ -764,7 +892,7 @@ FloriaCharts2.Chart = function(divId)
                let customTolltipStr = tooltipPainterFunc(p.dataIndex, p.dataset.data, p.label, i, param1, param2, param3, param4);
                if (customTolltipStr == null)
                 continue;
-               str+='<TR><TD><SPAN class="chartTooltipColorBlock" style="background-color:'+colors.backgroundColor+'; border-color:'+colors.borderColor+'"></SPAN></TD>'
+               str+='<TR><TD>'+_pointStyleTooltipSwatchHTML(p.dataset.pointStyle, colors.backgroundColor, colors.borderColor)+'</TD>'
                        +'<TD colspan="2"><B font-size="120%">'+p.dataset.labelSimple+'</B></TD>'
                        +customTolltipStr
                    +'</TR>'
@@ -793,13 +921,21 @@ FloriaCharts2.Chart = function(divId)
       return this;
     }
     
-   this.setLegendBehavior = function(active)
+   this.setLegendBehavior = function(active, usePointStyle)
     {
       if (active == false)
        return this._legend = null;
        
       this._legend = {
-         onClick: function (evt, item, legend) {
+         // Opt-in only (usePointStyle === true): draw each legend swatch using the dataset's
+         // own pointStyle (circle/rect/triangle/star/rectRot/...) instead of the classic plain
+         // color box, so a series with a non-default shape (see buildScatterDataset's
+         // `pointStyle` visualSpec) is recognizable by shape in the legend too, not just by
+         // color. Left out entirely (undefined) when not requested, which preserves Chart.js's
+         // default (plain color box) legend rendering exactly as before for every existing
+         // caller of setLegendBehavior(true) that doesn't ask for this.
+         labels: usePointStyle === true ? { usePointStyle: true, pointStyleWidth: 10 } : undefined
+        ,onClick: function (evt, item, legend) {
              if (legend.chart.data.datasets.length == 1)
               return;
              const c = legend.chart;
@@ -808,14 +944,14 @@ FloriaCharts2.Chart = function(divId)
              if (c.isDatasetVisible(index) == false)
               {
                 legend.chart.show(index);
-                ds.backgroundColor = ds.backgroundColorInitial;
-                ds.borderColor = ds.borderColorInitial;
+//                ds.backgroundColor = ds.backgroundColorInitial;
+//                ds.borderColor = ds.borderColorInitial;
               }
-             else if (ds.backgroundColor != ds.backgroundColorFaded)
-              {
-                ds.backgroundColor = ds.backgroundColorFaded;
-                ds.borderColor = ds.borderColorFaded;
-              }
+//             else if (ds.backgroundColor != ds.backgroundColorFaded)
+//              {
+//                ds.backgroundColor = ds.backgroundColorFaded;
+//                ds.borderColor = ds.borderColorFaded;
+//              }
              else
               legend.chart.hide(index);
               
