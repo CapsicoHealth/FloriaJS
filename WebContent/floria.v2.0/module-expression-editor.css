@@ -1,0 +1,433 @@
+/* ===========================================================================
+ * Copyright (C) 2026 CapsicoHealth Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ============================================================
+   module-expression-editor.css
+   Styles for FloriaExpressionEditor – a generic point-and-click +
+   read-only-preview editor for AND/OR/NOT/nested boolean expression
+   trees (see module-expression-editor.js for the JSON tree shape).
+
+   All rules are scoped under .fee-root so multiple instances on the
+   same page never collide.
+
+   DESIGN TOKENS — kept intentionally in sync with module-tree-explorer.css:
+     Primary accent  : #4f46e5  (indigo-600)
+     Accent light    : #ede9fe  (indigo-100)
+     Accent border   : #a5b4fc  (indigo-300)
+     Danger          : #dc2626  (red-600)
+     Border          : #e1e4e8
+     Background      : #f5f7fa
+     Text primary    : #1a1f36
+     Text body       : #374151
+     Text muted      : #9ca3af
+   ============================================================ */
+
+/* ── Root container ──────────────────────────────────────────────────────
+   Intentionally NO fixed height / overflow here: the component takes the
+   full width of its host div and grows to its natural content height —
+   the *parent* div is expected to be the scroll container. */
+.fee-root {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a1f36;
+}
+
+.fee-root *, .fee-root *::before, .fee-root *::after {
+  box-sizing: border-box;
+}
+
+/* ── Toolbar (help icon etc.) ─────────────────────────────────────────── */
+.fee-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fee-help-icon {
+  cursor: help;
+  border: 1px solid #a5b4fc;
+  color: #4f46e5;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: #ede9fe;
+}
+
+.fee-help-body { max-width: 320px; font-size: 12px; line-height: 1.5; }
+.fee-help-body b { color: #4f46e5; }
+
+/* ── Builder: rows / groups ───────────────────────────────────────────── */
+.fee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fee-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  border-left: 2px solid transparent;
+}
+
+.fee-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fee-op-toggle {
+  display: inline-flex;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.fee-op-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+}
+.fee-op-btn + .fee-op-btn { border-left: 1px solid #e1e4e8; }
+.fee-op-btn:hover { background: #f3f4f6; }
+.fee-op-btn.active { background: #4f46e5; color: #fff; }
+.fee-op-btn.active:hover { background: #4338ca; }
+
+/* ── "Matching"/"Not matching" toggle ─────────────────────────────────────
+   An iOS-style switch + dynamic label, replicating the look & feel of the
+   Inclusion/Exclusion switch in module-cohorts-sub-builder.js
+   (_ruleToggleInfo/.cjb-switch), just with expression-oriented language
+   ("Matching this expression" / "Not matching this expression") instead of
+   the patient-specific "Inclusion Rule"/"Exclusion Rule" copy. */
+.fee-not-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.fee-not-toggle-wrap.fee-not-readonly { cursor: default; }
+
+.fee-switch {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  width: 34px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.fee-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.fee-switch-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  /* "Matching" / off state — same green already used elsewhere for a positive/affirmative state */
+  background: #5b9b6a;
+  border-radius: 18px;
+  transition: background 0.18s;
+}
+.fee-switch-slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  transition: transform 0.18s;
+}
+.fee-switch input:checked + .fee-switch-slider,
+.fee-switch-slider.fee-switch-on {
+  /* "Not matching" / on state — same red used elsewhere for a negated/exclusion state */
+  background: #c0625f;
+}
+.fee-switch input:checked + .fee-switch-slider::before,
+.fee-switch-slider.fee-switch-on::before {
+  transform: translateX(16px);
+}
+.fee-switch input:focus-visible + .fee-switch-slider {
+  box-shadow: 0 0 0 2px rgba(85,121,198,0.35);
+}
+.fee-switch-disabled { cursor: default; }
+
+.fee-not-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #15803d;
+  white-space: nowrap;
+}
+.fee-not-toggle-wrap.fee-not-on .fee-not-toggle-label { color: #dc2626; }
+
+.fee-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.fee-move-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.fee-move-btn:hover:not(:disabled) { color: #4f46e5; }
+.fee-move-btn:disabled { opacity: 0.25; cursor: default; }
+
+.fee-btn {
+  border: 1px solid #e1e4e8;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+  white-space: nowrap;
+}
+.fee-btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+
+.fee-btn-danger { color: #dc2626; border-color: #fecaca; }
+.fee-btn-danger:hover { background: #fef2f2; }
+
+/* ── Leaf (condition) editor ──────────────────────────────────────────── */
+.fee-leaf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: #f9fafb;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.fee-select {
+  padding: 4px 6px;
+  font-size: 13px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1f36;
+  max-width: 200px;
+}
+
+.fee-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 160px;
+}
+
+.fee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ede9fe;
+  color: #4338ca;
+  border-radius: 12px;
+  padding: 2px 4px 2px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fee-chip-x {
+  border: none;
+  background: none;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.fee-chip-x:hover { color: #dc2626; }
+
+.fee-value-input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  padding: 3px 4px;
+  min-width: 120px;
+  flex: 1 1 auto;
+  background: transparent;
+}
+
+/* ── Custom Picker values (FloriaFactories.PickerRegistry) ──────────────────
+   Mount point for a var's custom Picker (see module-expression-editor.js's
+   _renderLeaf/_mountPendingPickers) — PickerRegistry.render() fills this div itself with a
+   "Pick" link + a codesSelectionBox span; just line these up nicely alongside the var/func
+   <select>s in .fee-leaf, matching .fee-values' own flex sizing above. */
+.fee-values-picker {
+  gap: 6px;
+}
+.fee-values-picker a {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f46e5;
+  text-decoration: none;
+}
+.fee-values-picker a:hover { text-decoration: underline; }
+.fee-values-picker .codesSelectionBox {
+  font-size: 12px;
+  color: #374151;
+}
+
+
+/* ── Nested group container ───────────────────────────────────────────── */
+/* A more pronounced indent (margin-left) + a solid, colored left border so nested "blocks" are
+   unmistakably visually distinct from the flow they're nested inside — the dashed outline alone
+   (kept, more subtle) wasn't enough of a visual anchor at a glance, especially several levels deep. */
+.fee-group {
+  margin-left: 22px;
+  border: 1px dashed #c7d2fe;
+  border-left: 4px solid #818cf8;
+  border-radius: 8px;
+  padding: 10px 10px 10px 14px;
+  background: #fbfbff;
+}
+
+.fee-group-actions, .fee-empty-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.fee-group-actions { margin-bottom: 6px; }
+.fee-empty-list { padding: 10px 2px; }
+
+/* ── Preview tab ───────────────────────────────────────────────────────── */
+.fee-preview-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.fee-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.fee-warning-contradiction { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.fee-warning-tautology     { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.fee-warning-info          { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.fee-warning-ok            { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+.fee-info-icon {
+  cursor: help;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.fee-tooltip-body { max-width: 280px; font-size: 12px; line-height: 1.5; }
+
+.fee-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 14px 0 6px;
+}
+.fee-section-label:first-child { margin-top: 0; }
+
+.fee-pretty {
+  background: #1a1f2e;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+}
+.fee-tok-var  { color: #7dd3fc; }
+.fee-tok-func { color: #c4b5fd; }
+.fee-tok-str  { color: #86efac; }
+.fee-tok-kw   { color: #fca5a5; font-weight: 600; }
+.fee-tok-punc { color: #94a3b8; }
+.fee-tok-cmt  { color: #64748b; font-style: italic; }
+
+.fee-json {
+  background: #f9fafb;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.fee-json .json_key     { color: #4f46e5; }
+.fee-json .json_string  { color: #16a34a; }
+.fee-json .json_number  { color: #d97706; }
+.fee-json .json_boolean { color: #7c3aed; }
+.fee-json .json_null    { color: #9ca3af; }
+
+.fee-empty-msg {
+  color: #9ca3af;
+  font-size: 13px;
+  padding: 20px;
+  text-align: center;
+}
+
+.fee-hint-list {
+  margin: 4px 0 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}

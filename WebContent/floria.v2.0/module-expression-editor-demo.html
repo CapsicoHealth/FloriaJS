@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FloriaExpressionEditor — Demo</title>
+
+  <!-- Floria base CSS (provides .tabContainer / .tabHeader / .tabBody etc.) -->
+  <link rel="stylesheet" href="/static/css/floria.css">
+
+  <!--
+    NOTE: module-expression-editor.css is injected dynamically by the JS module via
+          FloriaDOM.injectCSSLink (same pattern as module-tables.js / module-tree-explorer.js).
+          You do NOT need a separate <link> tag for it here.
+  -->
+  <link id="FLORIA_CSS_ANCHOR" rel="stylesheet" href="/static/css/capsico.css"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #eef0f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #1a1f36;
+    }
+
+    h1   { margin: 0 0 4px; font-size: 1.4rem; }
+    h2   { margin: 32px 0 6px; font-size: 1.1rem; color: #374151; }
+    p    { margin: 0 0 16px; color: #6b7280; font-size: 13px; }
+
+    /* Wrap each editor in a card that sets the scrollable viewport the component
+       expects.  The component itself fills 100% width and grows to content height;
+       the card provides the visible scroll box. */
+    .demo-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(79,70,229,0.10);
+      overflow: hidden;
+      height: 60vh;
+      padding: 5px 5px;
+    }
+
+    .editor-scroll-host {
+      max-height: 600px;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .demo-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h1>FloriaExpressionEditor</h1>
+<p>
+  Two independent editor instances demonstrating the component's configurable vocabulary (vars + functions).
+  They share the same JSON tree shape and the same tautology/contradiction analyzer — only the configuration differs.
+  Each instance's own <strong>Editor</strong> / <strong>Preview</strong> / <strong>JSON</strong> tabs (built into the
+  component itself — see FloriaExpressionEditor.render()) are the only UI needed to build, review, and inspect the
+  expression; nothing extra is wired up here in the demo page.
+</p>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     INSTANCE 1 – Medical codes (ICD-10 Dx / CPT-HCPCS / DRG / Procedure)
+     ══════════════════════════════════════════════════════════════════════════ -->
+<h2>Instance 1 — Medical Code Filter (Cohort Designer)</h2>
+<p>
+  Replicates the <code>_anchorCodesTree</code> vocabulary from <code>COHORT_MARTS_DATA.FindJourneys3</code>.
+  Variables: <em>DxPrimary, DxSecondaries, DxAll, CptHcpcs, Drg, PrcPrimary, PrcSecondaries, PrcAll</em>.
+  Functions: <em>like, in</em>.
+</p>
+<div id="editor-medical" class="demo-card">
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     INSTANCE 2 – Text-matching test cases
+     ══════════════════════════════════════════════════════════════════════════ -->
+<h2>Instance 2 — Text Matching (Agentic Test Cases)</h2>
+<p>
+  Replicates the test-case JSON from the Agentic backend.
+  Variables: <em>txt</em>.  Functions: <em>any, all, none</em>.
+  Pre-loaded with a sample tree for immediate visual feedback.
+</p>
+<div id="editor-text" class="demo-card">
+</div>
+
+<p class="demo-note">
+  Both editors share the same core model/validator/tautology-detector.
+  Only <code>vars</code> and <code>functions</code> differ between them.
+</p>
+
+<script type="module">
+
+import { FloriaExpressionEditor } from './module-expression-editor.js';
+import {  } from '/static/js/pickers.js'
+
+// ── Instance 1: Medical codes ──────────────────────────────────────────────
+
+const medicalVars = [
+   { name: 'DxPrimary'     , label: 'Dx Primary (ICD-10)'       , picker: 'DxCode', pickerParams: { codeType:10 } }
+  ,{ name: 'DxSecondaries' , label: 'Dx Secondaries (ICD-10)'   , picker: 'DxCode', pickerParams: { codeType:10 } }
+  ,{ name: 'DxAll'         , label: 'Dx All (Primary+Secondary)', picker: 'DxCode', pickerParams: { codeType:10 } }
+  ,{ name: 'CptHcpcs'      , label: 'CPT / HCPCS'               , picker: 'HCPCSCode' }
+  ,{ name: 'Drg'           , label: 'DRG'                       , picker: 'DrgCode' }
+  ,{ name: 'PrcPrimary'    , label: 'Procedure Primary'         , picker: 'PrcCode' }
+  ,{ name: 'PrcSecondaries', label: 'Procedure Secondaries'     , picker: 'PrcCode' }
+  ,{ name: 'PrcAll'        , label: 'Procedure All'             , picker: 'PrcCode' }
+];
+
+const medicalFunctions = [
+   { name: 'like', label: 'like (prefix match)' }
+  ,{ name: 'in'  , label: 'in (exact match)'    }
+];
+
+// A sample tree that mirrors the reference example in the BigQuery installer SQL:
+//   DxAll like ["Z192%"]
+//   OR CptHcpcs in ["A9607"]
+//   OR ( CptHcpcs in ["J9219",...] AND NOT DxAll like ["R9721%"] )
+const medicalSampleTree = [
+   {             "expr": { "var": "DxAll",    "f": "like", "vals": ["Z192%"] } }
+  ,{ "op": "or", "expr": { "var": "CptHcpcs", "f": "in",   "vals": ["A9607"] } }
+  ,{ "op": "or",
+     "sub": [
+        {                          "expr": { "var": "CptHcpcs", "f": "in",   "vals": ["J9219","J9218","J9217","J1954","J1952","J1951","J1950"] } }
+       ,{ "op": "and", "not": true, "expr": { "var": "DxAll",    "f": "like", "vals": ["R9721%"] } }
+     ]
+   }
+];
+
+// Minimal domain module for the medical vocabulary:
+//   • "in" is always a subset relationship of "like" prefix-matching the same var, so:
+//     - if exprA is a like prefix and exprB is in with values that all start with that prefix
+//       → 'implies' (if exprA is true, exprB might be true but not guaranteed — actually the
+//         reverse: if the in-list values all start with the like prefix, exprA IMPLIES exprB could match,
+//         but in Boolean terms we'd need exprB's value to be a subset of exprA's matching set to say
+//         exprA implies exprB is true when exprA is true)
+//   For V1 the domain module just demonstrates the interface: it detects the simple case where
+//   two "like" expressions on the same var have the same prefix values (identical → same atom, handled
+//   by the structural checker already) or one is a prefix of the other.
+const medicalDomain = {
+   relate(exprA, exprB)
+    {
+      if (exprA.var !== exprB.var || exprA.f !== 'like' || exprB.f !== 'like')
+       return null;
+      // If every val in A is a prefix of every val in B, A's match set ⊇ B's match set → A implies B
+      const allAPrefixOfB = exprA.vals.every(a => exprB.vals.some(b => b.startsWith(a.replace(/%+$/, ''))));
+      if (allAPrefixOfB === true)
+       return 'implies';
+      return null;
+    }
+};
+
+const editor1 = new FloriaExpressionEditor('editor-medical', {
+   vars        : medicalVars
+  ,functions   : medicalFunctions
+  ,initialTree : medicalSampleTree
+  ,domain      : medicalDomain
+});
+editor1.render();
+
+
+// ── Instance 2: Text-matching test cases ───────────────────────────────────
+
+const textVars = [
+   { name: 'txt', label: 'Text Content' }
+];
+
+const textFunctions = [
+   { name: 'any' , label: 'contains any'  }
+  ,{ name: 'all' , label: 'contains all'  }
+  ,{ name: 'none', label: 'contains none' }
+];
+
+// Matches the test-case JSON from the Agentic backend reference (see chat history):
+//   txt any ["Wegovy","wegovy"]
+//   AND txt any ["top 10","top ten"]
+//   AND txt any ["provider","providers"]
+const textSampleTree = [
+   {              "expr": { "var": "txt", "f": "any", "vals": ["Wegovy", "wegovy"] } }
+  ,{ "op": "and", "expr": { "var": "txt", "f": "any", "vals": ["top 10", "top ten"] } }
+  ,{ "op": "and", "expr": { "var": "txt", "f": "any", "vals": ["provider", "providers"] } }
+];
+
+// Simple domain module: for the "none" function, two expressions using "none" with overlapping
+// values constrain the same column in compatible ways — no special relationship to declare.
+// For "any" vs "none" on the same vals array: that is 'exclusive' (a text cannot both
+// contain AND not contain the same phrase).
+const textDomain = {
+   relate(exprA, exprB)
+    {
+      if (exprA.var !== exprB.var)
+       return null;
+      // any ["X"] and none ["X"] on the same values → exclusive (can never both be true)
+      if (exprA.f === 'any' && exprB.f === 'none')
+       {
+         const overlap = exprA.vals.some(v => exprB.vals.includes(v));
+         if (overlap === true)
+          return 'exclusive';
+       }
+      return null;
+    }
+};
+
+const editor2 = new FloriaExpressionEditor('editor-text', {
+   vars        : textVars
+  ,functions   : textFunctions
+  ,initialTree : textSampleTree
+  ,domain      : textDomain
+});
+editor2.render();
+
+</script>
+
+</body>
+</html>
