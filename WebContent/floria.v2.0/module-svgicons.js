@@ -30,8 +30,8 @@ FloriaSVGIcons.COLORS = {
 FloriaSVGIcons.ICONS = { };
 
 // Generic wrapper to keep your paths clean and reusable
-const svgWrapper = (content, title, color=FloriaSVGIcons.COLORS.neutralBlue, size = "1.1em") => `
-  <svg ${size==null?'':`width="${size}" height="${size}"`} viewBox="0 0 24 24" fill="none" 
+const svgWrapper = (content, title, color=FloriaSVGIcons.COLORS.neutralBlue, size = "1.1em", fill="none") => `
+  <svg ${size==null?'':`width="${size}" height="${size}"`} viewBox="0 0 24 24" fill="${fill}" 
        ${color==null?'':`stroke="${color}"`} stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     ${title ? `<title>${title}</title>` : ''}
     ${content}
@@ -80,3 +80,11 @@ FloriaSVGIcons.ICONS.DOC = (title, color=FloriaSVGIcons.COLORS.primary, size) =>
   <polyline points="14 2 14 8 20 8"/>
 `, title, color, size);
 
+FloriaSVGIcons.ICONS.BOOKMARK = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
+  <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+`, title, color, size);
+
+
+FloriaSVGIcons.ICONS.BOOKMARK_FILLED = (title, color=FloriaSVGIcons.COLORS.primary, size, fill=FloriaSVGIcons.COLORS.successGreen) => svgWrapper(`
+    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+`, title, color, size, fill);
