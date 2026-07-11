@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TreeExplorer — Demo</title>
+  <link rel="stylesheet" href="./module-tree-explorer.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #eef0f5;
+      min-height: 100vh;
+    }
+
+    h1 { margin: 0 0 4px; font-size: 1.5rem; color: #1a1f36; }
+    .subtitle { margin: 0 0 20px; color: #6b7280; font-size: 0.9rem; }
+
+    .demo-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(79,70,229,0.10);
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #explorer {
+      height: 580px;
+    }
+
+    .demo-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    /* Preview overlay */
+    .preview-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-overlay.open { display: flex; }
+
+    .preview-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px 16px;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1f36;
+    }
+    .preview-close {
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 20px;
+      line-height: 1;
+      border: none;
+      background: none;
+      padding: 0 2px;
+    }
+    .preview-close:hover { color: #dc2626; }
+    .preview-body {
+      border: 1px solid #e1e4e8;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f9fafb;
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.6;
+    }
+    .preview-body table { border-collapse: collapse; width: 100%; }
+    .preview-body td { padding: 4px 8px; }
+    .preview-body td:first-child { color: #6b7280; font-size: 12px; white-space: nowrap; }
+    .preview-body td:last-child  { font-weight: 600; word-break: break-all; }
+  </style>
+</head>
+<body>
+
+<h1>TreeExplorer</h1>
+<p class="subtitle">
+  Two-panel file-browser component · Local JSON simulation (no server required) ·
+  Try expanding folders, right-clicking items, filtering, sorting, paging, and trash mode.
+</p>
+
+<div class="demo-card">
+  <div id="explorer"></div>
+</div>
+
+<p class="demo-note">
+  All operations (add, rename, delete, restore) run entirely in-memory on the demo data.
+  Refresh the page to reset.
+</p>
+
+<!-- File preview overlay -->
+<div class="preview-overlay" id="preview">
+  <div class="preview-box">
+    <div class="preview-header">
+      <span id="preview-title">File Preview</span>
+      <button class="preview-close" id="preview-close">✕</button>
+    </div>
+    <div class="preview-body" id="preview-body"></div>
+  </div>
+</div>
+
+<script type="module">
+// ── Simulated bucket data ─────────────────────────────────────────────────
+
+// Each key is a folder id; null represents the bucket root.
+// The special `_deleted` flag marks soft-deleted items in this demo.
+
+const DATA = {
+  null: {
+    folders: [
+      { id: 'reports',   name: 'Reports'   },
+      { id: 'images',    name: 'Images'    },
+      { id: 'documents', name: 'Documents' },
+      { id: 'marketing', name: 'Marketing' },
+    ],
+    files: [
+      { id: 'readme.pdf', name: 'README.pdf', size: 51200,
+        lastModified: '2025-01-10T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  reports: {
+    folders: [
+      { id: 'reports/2024', name: '2024' },
+      { id: 'reports/2025', name: '2025' },
+    ],
+    files: [
+      { id: 'reports/annual-summary.pdf', name: 'Annual Summary.pdf',
+        size: 2097152, lastModified: '2025-02-01T14:30:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/q1-2025.pdf', name: 'Q1 2025 Report.pdf',
+        size: 1048576, lastModified: '2025-04-15T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/q2-2025.pdf', name: 'Q2 2025 Report.pdf',
+        size: 1258291, lastModified: '2025-07-12T11:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  'reports/2024': {
+    folders: [],
+    files: [
+      { id: 'reports/2024/q1.pdf', name: 'Q1 2024.pdf', size: 983040,
+        lastModified: '2024-04-10T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/2024/q2.pdf', name: 'Q2 2024.pdf', size: 1048576,
+        lastModified: '2024-07-10T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/2024/q3.pdf', name: 'Q3 2024.pdf', size: 1126400,
+        lastModified: '2024-10-10T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/2024/q4.pdf', name: 'Q4 2024.pdf', size: 1179648,
+        lastModified: '2025-01-10T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  'reports/2025': {
+    folders: [],
+    files: [
+      { id: 'reports/2025/q1.pdf', name: 'Q1 2025.pdf', size: 1048576,
+        lastModified: '2025-04-15T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'reports/2025/q2-draft.pdf', name: 'Q2 2025 (Draft).pdf', size: 917504,
+        lastModified: '2025-07-01T08:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  images: {
+    folders: [
+      { id: 'images/photos',      name: 'Photos'      },
+      { id: 'images/logos',       name: 'Logos'       },
+      { id: 'images/screenshots', name: 'Screenshots' },
+    ],
+    files: [],
+  },
+
+  'images/photos': {
+    folders: [],
+    files: [
+      { id: 'images/photos/conference.jpg', name: 'Conference 2025.jpg',
+        size: 3145728, lastModified: '2025-03-20T14:00:00Z', mimeType: 'image/jpeg' },
+      { id: 'images/photos/team.jpg', name: 'Team Photo.jpg',
+        size: 2621440, lastModified: '2025-02-14T10:00:00Z', mimeType: 'image/jpeg' },
+      { id: 'images/photos/office.png', name: 'Office View.png',
+        size: 4194304, lastModified: '2025-01-05T09:00:00Z', mimeType: 'image/png' },
+      { id: 'images/photos/banner.gif', name: 'Homepage Banner.gif',
+        size: 1572864, lastModified: '2025-04-01T12:00:00Z', mimeType: 'image/gif' },
+    ],
+  },
+
+  'images/logos': {
+    folders: [],
+    files: [
+      { id: 'images/logos/logo-primary.png', name: 'Logo Primary.png',
+        size: 204800, lastModified: '2024-12-01T09:00:00Z', mimeType: 'image/png' },
+      { id: 'images/logos/logo-dark.png', name: 'Logo Dark.png',
+        size: 196608, lastModified: '2024-12-01T09:00:00Z', mimeType: 'image/png' },
+      { id: 'images/logos/favicon.png', name: 'Favicon.png',
+        size: 4096,   lastModified: '2024-12-15T09:00:00Z', mimeType: 'image/png' },
+      { id: 'images/logos/icon.bmp', name: 'Windows Icon.bmp',
+        size: 40960,  lastModified: '2024-11-01T09:00:00Z', mimeType: 'image/bmp' },
+    ],
+  },
+
+  'images/screenshots': {
+    folders: [],
+    files: [
+      { id: 'images/screenshots/dashboard.png', name: 'Dashboard.png',
+        size: 819200, lastModified: '2025-05-01T10:00:00Z', mimeType: 'image/png' },
+      { id: 'images/screenshots/report-view.png', name: 'Report View.png',
+        size: 614400, lastModified: '2025-05-02T11:00:00Z', mimeType: 'image/png' },
+      { id: 'images/screenshots/mobile.jpg', name: 'Mobile App.jpg',
+        size: 512000, lastModified: '2025-05-10T14:00:00Z', mimeType: 'image/jpeg' },
+    ],
+  },
+
+  documents: {
+    folders: [
+      { id: 'documents/contracts', name: 'Contracts' },
+      { id: 'documents/policies',  name: 'Policies'  },
+    ],
+    files: [
+      { id: 'documents/company-overview.pdf', name: 'Company Overview.pdf',
+        size: 3145728, lastModified: '2025-01-15T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  'documents/contracts': {
+    folders: [],
+    files: [
+      { id: 'documents/contracts/vendor-a.pdf', name: 'Vendor A Contract.pdf',
+        size: 524288, lastModified: '2025-02-20T14:00:00Z', mimeType: 'application/pdf' },
+      { id: 'documents/contracts/vendor-b.pdf', name: 'Vendor B Contract.pdf',
+        size: 491520, lastModified: '2025-03-01T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'documents/contracts/nda-template.pdf', name: 'NDA Template.pdf',
+        size: 262144, lastModified: '2024-11-10T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  'documents/policies': {
+    folders: [],
+    files: [
+      { id: 'documents/policies/privacy.pdf', name: 'Privacy Policy.pdf',
+        size: 327680, lastModified: '2025-01-01T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'documents/policies/security.pdf', name: 'Security Policy.pdf',
+        size: 294912, lastModified: '2025-01-01T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'documents/policies/acceptable-use.pdf', name: 'Acceptable Use Policy.pdf',
+        size: 180224, lastModified: '2025-01-01T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+
+  marketing: {
+    folders: [
+      { id: 'marketing/campaigns', name: 'Campaigns'   },
+      { id: 'marketing/assets',    name: 'Brand Assets' },
+    ],
+    files: [],
+  },
+
+  'marketing/campaigns': {
+    folders: [],
+    files: [
+      { id: 'marketing/campaigns/q1-brief.pdf', name: 'Q1 2025 Campaign Brief.pdf',
+        size: 2097152, lastModified: '2025-01-20T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'marketing/campaigns/social-banner.jpg', name: 'Social Media Banner.jpg',
+        size: 1048576, lastModified: '2025-02-01T10:00:00Z', mimeType: 'image/jpeg' },
+      { id: 'marketing/campaigns/promo.gif', name: 'Promo Animation.gif',
+        size: 2621440, lastModified: '2025-02-15T14:00:00Z', mimeType: 'image/gif' },
+      { id: 'marketing/campaigns/email-header.jpg', name: 'Email Header.jpg',
+        size: 307200, lastModified: '2025-03-10T09:00:00Z', mimeType: 'image/jpeg' },
+    ],
+  },
+
+  'marketing/assets': {
+    folders: [],
+    files: [
+      { id: 'marketing/assets/brand-guide.pdf', name: 'Brand Guide 2025.pdf',
+        size: 15728640, lastModified: '2025-01-05T09:00:00Z', mimeType: 'application/pdf' },
+      { id: 'marketing/assets/color-palette.png', name: 'Color Palette.png',
+        size: 102400,   lastModified: '2025-01-05T09:00:00Z', mimeType: 'image/png' },
+      { id: 'marketing/assets/typeface.pdf', name: 'Typeface Specification.pdf',
+        size: 4718592,  lastModified: '2025-01-06T09:00:00Z', mimeType: 'application/pdf' },
+    ],
+  },
+};
+
+// Soft-deleted items live here (id → item)
+const TRASH_FILES   = {};
+const TRASH_FOLDERS = {};
+
+// ── Utility helpers ───────────────────────────────────────────────────────
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function fmt(bytes) {
+  if (bytes == null) return '';
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// ── Plugin ────────────────────────────────────────────────────────────────
+
+const plugin = {
+
+  // ── Folder navigation ─────────────────────────────────────────────────
+
+  async onListFolders(node) {
+    await sleep(120);   // simulate a tiny network hop
+    const key = node ? node.id : null;
+    if (node && !DATA[key]) DATA[key] = { folders: [], files: [] };
+    return DATA[key]?.folders.filter(f => !TRASH_FOLDERS[f.id]) || [];
+  },
+
+  // ── File listing ──────────────────────────────────────────────────────
+
+  async onListFiles(node, { filter, orderBy, orderDir, start, size, trashcan }) {
+    await sleep(120);
+    const key = node ? node.id : null;
+
+    let items;
+    if (trashcan) {
+      // Return soft-deleted files that belong to this folder
+      items = Object.values(TRASH_FILES).filter(f => f._parentKey === key);
+    } else {
+      items = [...(DATA[key]?.files || [])];
+      // Apply text filter
+      if (filter) {
+        const q = filter.toLowerCase();
+        items = items.filter(f => f.name.toLowerCase().includes(q));
+      }
+    }
+
+    // Sort
+    items.sort((a, b) => {
+      let av, bv;
+      if      (orderBy === 'size') { av = a.size || 0;        bv = b.size || 0; }
+      else if (orderBy === 'date') { av = a.lastModified || ''; bv = b.lastModified || ''; }
+      else                         { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      if (av < bv) return orderDir === 'asc' ? -1 :  1;
+      if (av > bv) return orderDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+
+    const total = items.length;
+    items = items.slice(start, start + size);
+    return { items, total };
+  },
+
+  // ── Add folder ────────────────────────────────────────────────────────
+
+  async onAddFolder(parentNode) {
+    const name = prompt('New folder name:');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    const key     = parentNode ? parentNode.id : null;
+    if (!DATA[key]) DATA[key] = { folders: [], files: [] };
+    const newId = (key ? key + '/' : '') + trimmed.toLowerCase().replace(/\s+/g, '-');
+    DATA[key].folders.push({ id: newId, name: trimmed });
+    DATA[newId] = { folders: [], files: [] };
+  },
+
+  // ── Add file ──────────────────────────────────────────────────────────
+
+  async onAddFile(parentNode) {
+    const name = prompt('New filename (e.g. report.pdf):');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    const key     = parentNode ? parentNode.id : null;
+    if (!DATA[key]) DATA[key] = { folders: [], files: [] };
+    const newId = (key ? key + '/' : '') + trimmed.toLowerCase().replace(/\s+/g, '-');
+    const ext   = trimmed.split('.').pop().toLowerCase();
+    const mime  = ext === 'pdf' ? 'application/pdf'
+                : ['jpg','jpeg'].includes(ext) ? 'image/jpeg'
+                : ext === 'png' ? 'image/png'
+                : ext === 'gif' ? 'image/gif'
+                : ext === 'bmp' ? 'image/bmp'
+                : 'application/octet-stream';
+    DATA[key].files.push({
+      id:           newId,
+      name:         trimmed,
+      size:         Math.floor(Math.random() * 2 * 1024 * 1024) + 1024,
+      lastModified: new Date().toISOString(),
+      mimeType:     mime,
+      _parentKey:   key,
+    });
+  },
+
+  // ── Delete folder (soft) ──────────────────────────────────────────────
+
+  async onDeleteFolder(node) {
+    if (!confirm(`Delete folder "${node.name}"? It will be moved to trash.`)) {
+      throw new Error('Cancelled');
+    }
+    TRASH_FOLDERS[node.id] = node;
+    // Remove from parent's folder list in DATA
+    const parentKey = node._parent ? node._parent.id : null;
+    if (DATA[parentKey]) {
+      DATA[parentKey].folders = DATA[parentKey].folders.filter(f => f.id !== node.id);
+    }
+  },
+
+  // ── Delete file (soft) ────────────────────────────────────────────────
+
+  async onDeleteFile(item) {
+    if (!confirm(`Delete "${item.name}"? It will be moved to trash.`)) {
+      throw new Error('Cancelled');
+    }
+    // Remember which folder it came from so we can list it in trash mode
+    const explorerNode = plugin._parentExplorer.getSelectedFolder();
+    item._parentKey    = explorerNode ? explorerNode.id : null;
+    TRASH_FILES[item.id] = item;
+    // Remove from live data
+    const key = item._parentKey;
+    if (DATA[key]) {
+      DATA[key].files = DATA[key].files.filter(f => f.id !== item.id);
+    }
+  },
+
+  // ── Restore folder ────────────────────────────────────────────────────
+
+  async onRestoreFolder(node) {
+    delete TRASH_FOLDERS[node.id];
+    const parentKey = node._parent ? node._parent.id : null;
+    if (!DATA[parentKey]) DATA[parentKey] = { folders: [], files: [] };
+    DATA[parentKey].folders.push({ id: node.id, name: node.name });
+    plugin._parentExplorer.refreshTree(node._parent || null);
+  },
+
+  // ── Restore file ──────────────────────────────────────────────────────
+
+  async onRestoreFile(item) {
+    delete TRASH_FILES[item.id];
+    const key = item._parentKey;
+    if (!DATA[key]) DATA[key] = { folders: [], files: [] };
+    DATA[key].files.push(item);
+  },
+
+  // ── Rename folder ─────────────────────────────────────────────────────
+
+  async onRenameFolder(node, newName) {
+    if (!newName.trim()) return 'Name cannot be empty.';
+    const parentKey = node._parent ? node._parent.id : null;
+    const parentFolders = DATA[parentKey]?.folders || [];
+    const clash = parentFolders.find(f => f.id !== node.id && f.name.toLowerCase() === newName.trim().toLowerCase());
+    if (clash) return `A folder named "${newName.trim()}" already exists here.`;
+    // Update the folder record in its parent's list
+    const record = parentFolders.find(f => f.id === node.id);
+    if (record) record.name = newName.trim();
+  },
+
+  // ── Rename file ───────────────────────────────────────────────────────
+
+  async onRenameFile(item, newName) {
+    if (!newName.trim()) return 'Name cannot be empty.';
+    item.name = newName.trim();
+  },
+
+  // ── File select → show preview ────────────────────────────────────────
+
+  onFileSelect(item) {
+    document.getElementById('preview-title').textContent = item.name;
+    document.getElementById('preview-body').innerHTML = `
+      <table>
+        <tr><td>ID / Path</td><td>${item.id}</td></tr>
+        <tr><td>MIME Type</td><td>${item.mimeType || '—'}</td></tr>
+        <tr><td>Size</td>     <td>${fmt(item.size)}</td></tr>
+        <tr><td>Modified</td> <td>${fmtDate(item.lastModified)}</td></tr>
+      </table>
+      <p style="margin:12px 0 0;font-size:12px;color:#9ca3af;">
+        (In a real implementation this would open a signed-URL preview.)
+      </p>
+    `;
+    document.getElementById('preview').classList.add('open');
+  },
+};
+
+// ── Preview overlay close ─────────────────────────────────────────────────
+
+document.getElementById('preview-close').addEventListener('click', () => {
+  document.getElementById('preview').classList.remove('open');
+});
+document.getElementById('preview').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// ── Mount TreeExplorer ────────────────────────────────────────────────────
+
+import { TreeExplorer } from './module-tree-explorer.js';
+
+// FloriaPromptDialog is imported inside the component; provide a lightweight
+// stand-in for this demo (no dependency on the full dialog module).
+// We monkey-patch the module-dialog import by defining a minimal shim below.
+
+const explorer = new TreeExplorer('explorer', plugin);
+explorer.render();
+
+</script>
+
+<!-- Minimal FloriaPromptDialog shim so the demo works without module-dialog.js -->
+<script type="module">
+// Expose a global shim that module-tree-explorer.js can pick up if FloriaPromptDialog
+// is not resolvable.  In a real app, module-dialog.js is already available.
+// This shim uses window.prompt which is sufficient for the demo.
+window.FloriaPromptDialogShim = true;
+</script>
+
+</body>
+</html>

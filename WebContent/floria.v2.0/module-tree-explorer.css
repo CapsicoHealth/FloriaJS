@@ -1,0 +1,655 @@
+/* ===========================================================================
+ * Copyright (C) 2025 CapsicoHealth Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ============================================================
+   module-tree-explorer.css
+   Styles for TreeExplorer – a two-panel (tree + content) file
+   browser component.
+   All rules are scoped under .tex-root so multiple instances
+   on the same page never collide.
+
+   DESIGN TOKENS — kept intentionally in sync with module-content-explorer.css:
+     Primary accent  : #4f46e5  (indigo-600)
+     Accent light    : #ede9fe  (indigo-100)
+     Accent hover-bg : #e0e7ff  (indigo-100)
+     Accent border   : #a5b4fc  (indigo-300)
+     Danger          : #dc2626  (red-600)
+     Restore/safe    : #065f46  (emerald-800)
+     Trash-active    : #fef3c7 / #b45309  (amber-100 / amber-700)
+     Border          : #e1e4e8
+     Background      : #f5f7fa
+     Text primary    : #1a1f36
+     Text body       : #374151
+     Text muted      : #9ca3af
+   If you change any of these here, update module-content-explorer.css too.
+   ============================================================ */
+
+/* ── Root container ──────────────────────────────────────────────────────── */
+.tex-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a1f36;
+  background: #f5f7fa;
+  box-sizing: border-box;
+}
+
+.tex-root *, .tex-root *::before, .tex-root *::after {
+  box-sizing: border-box;
+}
+
+/* ── Header bar (breadcrumb + global actions) ────────────────────────────── */
+.tex-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e1e4e8;
+  flex-shrink: 0;
+  min-height: 40px;
+  flex-wrap: wrap;
+}
+
+.tex-breadcrumb {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.tex-crumb {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tex-crumb-link {
+  color: #4f46e5;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 3px;
+  transition: background 0.12s;
+}
+.tex-crumb-link:hover {
+  background: #ede9fe;
+  text-decoration: underline;
+}
+
+.tex-crumb-current {
+  color: #374151;
+  font-weight: 600;
+}
+
+.tex-crumb-sep {
+  color: #9ca3af;
+  padding: 0 3px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.tex-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Two-panel layout ────────────────────────────────────────────────────── */
+.tex-panels {
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Left panel (tree) ───────────────────────────────────────────────────── */
+.tex-left {
+  width: var(--tex-tree-width, 240px);
+  min-width: 120px;
+  max-width: 600px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-right: 1px solid #e1e4e8;
+  overflow: hidden;
+}
+
+.tex-tree-toolbar {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e1e4e8;
+  flex-shrink: 0;
+}
+
+.tex-tree-filter {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  background: #f9fafb;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tex-tree-filter:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79,70,229,0.12);
+  background: #fff;
+}
+
+.tex-tree-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7c7 transparent;
+}
+.tex-tree-body::-webkit-scrollbar       { width: 5px; }
+.tex-tree-body::-webkit-scrollbar-track  { background: transparent; }
+.tex-tree-body::-webkit-scrollbar-thumb  { background: #c7c7c7; border-radius: 3px; }
+
+/* ── Tree nodes ──────────────────────────────────────────────────────────── */
+.tex-node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 8px;   /* left padding is set via inline style for depth */
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0;
+  transition: background 0.1s;
+  min-height: 28px;
+  position: relative;
+}
+.tex-node-row:hover {
+  background: #f0f0fe;
+}
+.tex-node-row.tex-node-selected {
+  background: #ede9fe;
+  color: #4f46e5;
+  font-weight: 600;
+}
+.tex-node-row.tex-node-selected .tex-node-label {
+  color: #4f46e5;
+}
+
+.tex-expand-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  border-radius: 3px;
+  transition: color 0.1s;
+}
+.tex-expand-icon:hover {
+  color: #4f46e5;
+  background: rgba(79,70,229,0.08);
+}
+.tex-expand-leaf {
+  cursor: default;
+}
+.tex-expand-leaf:hover {
+  background: none;
+}
+
+@keyframes tex-spin { to { transform: rotate(360deg); } }
+.tex-loading-spin svg { animation: tex-spin 0.8s linear infinite; }
+
+.tex-node-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+}
+.tex-node-row.tex-node-selected .tex-node-icon {
+  color: #4f46e5;
+}
+
+.tex-node-label {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Flat filter list (when tree filter is active) */
+.tex-tree-flat-list .tex-node-row {
+  padding-left: 12px !important;
+}
+
+/* ── Resize handle ───────────────────────────────────────────────────────── */
+.tex-resizer {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  z-index: 1;
+}
+.tex-resizer:hover,
+.tex-resizer.tex-resizing {
+  background: #a5b4fc;
+}
+
+/* ── Right panel (content) ───────────────────────────────────────────────── */
+.tex-right {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Content toolbar */
+.tex-content-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  border-bottom: 1px solid #e1e4e8;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tex-filter {
+  flex: 1 1 80px;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: #f9fafb;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tex-filter:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79,70,229,0.12);
+  background: #fff;
+}
+
+.tex-sort-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tex-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #555;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tex-sort-btn:hover {
+  background: #e0e7ff;
+  color: #4f46e5;
+  border-color: #a5b4fc;
+}
+.tex-sort-btn.active {
+  background: #ede9fe;
+  color: #4f46e5;
+  border-color: #4f46e5;
+  font-weight: 600;
+}
+
+/* Toolbar icon buttons */
+.tex-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #555;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tex-icon-btn:hover {
+  background: #e0e7ff;
+  color: #4f46e5;
+  border-color: #4f46e5;
+}
+.tex-icon-btn svg { pointer-events: none; }
+
+.tex-icon-btn.tex-trash-active {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #f59e0b;
+}
+.tex-icon-btn.tex-trash-active:hover {
+  background: #fde68a;
+  color: #92400e;
+  border-color: #d97706;
+}
+
+/* Content body */
+.tex-content-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7c7 transparent;
+}
+.tex-content-body::-webkit-scrollbar       { width: 6px; }
+.tex-content-body::-webkit-scrollbar-track  { background: transparent; }
+.tex-content-body::-webkit-scrollbar-thumb  { background: #c7c7c7; border-radius: 3px; }
+
+/* ── File card grid ──────────────────────────────────────────────────────── */
+.tex-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  align-content: flex-start;
+}
+
+.tex-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px 12px;
+  border: 1px solid #e1e4e8;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+.tex-file-card:hover {
+  border-color: #a5b4fc;
+  box-shadow: 0 2px 10px rgba(79,70,229,0.14);
+  background: #f5f3ff;
+}
+.tex-file-card:active { background: #ede9fe; }
+
+.tex-file-card.tex-trashed {
+  opacity: 0.55;
+  filter: grayscale(50%);
+}
+.tex-file-card.tex-trashed:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 2px 10px rgba(245,158,11,0.15);
+  background: #fffbeb;
+}
+
+.tex-file-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.tex-file-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tex-file-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+  width: 100%;
+  /* max 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.tex-file-meta {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* ── Paging bar ──────────────────────────────────────────────────────────── */
+.tex-paging {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid #e1e4e8;
+  background: #fff;
+  flex-shrink: 0;
+  min-height: 38px;
+}
+
+.tex-page-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tex-page-btn:hover:not(:disabled) {
+  background: #e0e7ff;
+  color: #4f46e5;
+  border-color: #4f46e5;
+}
+.tex-page-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.tex-page-btn svg { pointer-events: none; }
+
+.tex-page-info {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* ── Context menu (shared with ContentExplorer visual style) ─────────────── */
+.tex-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+  padding: 4px 0;
+  min-width: 148px;
+  font-size: 13px;
+  animation: tex-menu-in 0.1s ease-out;
+}
+@keyframes tex-menu-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.tex-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  color: #374151;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.tex-context-menu-item:hover     { background: #f3f4f6; }
+.tex-context-menu-item.danger    { color: #dc2626; }
+.tex-context-menu-item.danger:hover { background: #fef2f2; }
+.tex-context-menu-item.restore   { color: #065f46; }
+.tex-context-menu-item.restore:hover { background: #d1fae5; }
+.tex-context-menu-item svg { flex-shrink: 0; pointer-events: none; }
+
+.tex-context-menu-sep {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+/* ── Folder Properties dialog ──────────────────────────────────────────────── */
+.tex-props-dlg {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  min-width: 280px;
+  max-width: 420px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.tex-props-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 8px 8px 0 0;
+}
+.tex-props-title {
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tex-props-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.tex-props-close:hover { color: #111827; }
+.tex-props-body {
+  padding: 16px 18px;
+}
+.tex-props-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+.tex-props-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tex-props-table th {
+  text-align: left;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 5px 10px 5px 0;
+  white-space: nowrap;
+}
+.tex-props-table td {
+  text-align: right;
+  color: #111827;
+  font-weight: 600;
+  padding: 5px 0;
+}
+.tex-props-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 6px;
+}
+.tex-props-section-recursive {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ── Empty / loading states ──────────────────────────────────────────────── */
+.tex-empty {
+  padding: 2.5em 1em;
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 13px;
+}
+.tex-empty-hint p          { margin: 0.4em 0; }
+.tex-empty-hint strong     { color: #4f46e5; }
+
+.tex-loading {
+  padding: 2em;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+.tex-tree-loading {
+  padding: 1em;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+}

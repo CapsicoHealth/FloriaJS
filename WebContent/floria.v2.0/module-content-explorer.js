@@ -43,6 +43,11 @@ import { FloriaPromptDialog } from "./module-dialog.js";
  *   async plugin.onRename(refnum, newTitle)
  *       Called when "Rename" is chosen from the folder context menu (active view only).
  *
+ *   async plugin.onFolderProperties(folder)  → { folders, files, totalSize }
+ *       If defined, adds a "Properties" option to the folder right-click menu.
+ *       The component calls this method and shows the returned statistics in a
+ *       popup dialog.  Return { folders: number, files: number, totalSize: number }.
+ *
  *   async plugin.onContentList(folderRefnum, { trashcan })  → Array<{refnum, …}>
  *       Called when a folder is opened.  Items are opaque to the explorer.
  *       trashcan reflects the current trashcan state so implementations can
@@ -160,6 +165,14 @@ const _SVG = {
                <polyline points="23 4 23 10 17 10"/>
                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
              </svg>`,
+
+  properties: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 <circle cx="12" cy="12" r="10"/>
+                 <line x1="12" y1="8" x2="12" y2="8" stroke-width="2.5"/>
+                 <line x1="12" y1="12" x2="12" y2="16"/>
+               </svg>`,
 };
 
 // ── Helper: dismiss any open context menu ─────────────────────────────────
@@ -458,6 +471,19 @@ export class ContentExplorer {
         });
         menu.appendChild(deleteItem);
       }
+      if (this._plugin.onFolderProperties) {
+        if (menu.children.length) {
+          const sep = document.createElement('div');
+          sep.className = 'cex-context-menu-sep';
+          menu.appendChild(sep);
+        }
+        const propsItem = this._makeMenuItem(_SVG.properties, 'Properties', false);
+        propsItem.addEventListener('click', async () => {
+          _dismissMenu();
+          this._showPropertiesDialog(folder, async () => this._plugin.onFolderProperties(folder));
+        });
+        menu.appendChild(propsItem);
+      }
     }
 
     if (!menu.children.length) return;
@@ -612,7 +638,61 @@ export class ContentExplorer {
     return dlg.show(item.title);
   }
 
+  // ── Properties dialog ─────────────────────────────────────────────────
+
+  _showPropertiesDialog(folder, fetchFn) {
+    const existing = document.getElementById('cex-props-dlg');
+    if (existing) existing.remove();
+
+    const title = folder.title || folder.name || folder.refnum || '';
+    const dlg = document.createElement('div');
+    dlg.id = 'cex-props-dlg';
+    dlg.className = 'cex-props-dlg';
+    dlg.innerHTML = `
+      <div class="cex-props-header">
+        <span class="cex-props-title">${_esc(title)} — Properties</span>
+        <button class="cex-props-close" title="Close">&#x2715;</button>
+      </div>
+      <div class="cex-props-body cex-props-loading">
+        <span class="cex-spin">${_SVG.refresh}</span> Computing…
+      </div>
+    `;
+    document.body.appendChild(dlg);
+
+    dlg.querySelector('.cex-props-close').addEventListener('click', () => dlg.remove());
+    document.addEventListener('keydown', function onKey(e) {
+      if (e.key === 'Escape') { dlg.remove(); document.removeEventListener('keydown', onKey); }
+    });
+
+    fetchFn().then(data => {
+      const body = dlg.querySelector('.cex-props-body');
+      body.classList.remove('cex-props-loading');
+      const hasSubFolders = Number(data.folders) > 0 || Number(data.directFolders) > 0;
+      body.innerHTML = `
+        <div class="cex-props-section-label">This folder (direct contents)</div>
+        <table class="cex-props-table">
+          <tr><th>Sub-folders</th><td>${Number(data.directFolders).toLocaleString()}</td></tr>
+          <tr><th>Files</th>      <td>${Number(data.directFiles).toLocaleString()}</td></tr>
+          <tr><th>Size</th>       <td>${_formatSize(data.directSize)}</td></tr>
+        </table>
+        ${hasSubFolders ? `
+        <div class="cex-props-section-label cex-props-section-recursive">Including all sub-folders</div>
+        <table class="cex-props-table">
+          <tr><th>Sub-folders</th><td>${Number(data.folders).toLocaleString()}</td></tr>
+          <tr><th>Files</th>      <td>${Number(data.files).toLocaleString()}</td></tr>
+          <tr><th>Total size</th> <td>${_formatSize(data.totalSize)}</td></tr>
+        </table>` : ''}
+      `;
+    }).catch(err => {
+      const body = dlg.querySelector('.cex-props-body');
+      body.classList.remove('cex-props-loading');
+      body.innerHTML = `<span style="color:#dc2626">Failed to load properties.</span>`;
+      console.error('ContentExplorer: onFolderProperties failed', err);
+    });
+  }
+
   // ── DOM helpers ───────────────────────────────────────────────────────
+
 
   _makeIconBtn(svgHtml, title) {
     const btn = document.createElement('button');
@@ -665,4 +745,14 @@ function _esc(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function _formatSize(bytes) {
+  if (bytes == null || bytes === '') return '';
+  const b = Number(bytes);
+  if (isNaN(b))         return '';
+  if (b < 1024)         return b + ' B';
+  if (b < 1024 * 1024)  return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1024 ** 3)    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  return (b / 1024 ** 3).toFixed(2) + ' GB';
 }

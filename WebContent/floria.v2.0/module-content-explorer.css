@@ -19,6 +19,21 @@
    Styles for the ContentExplorer reusable component.
    All rules are scoped under .cex-root so multiple instances
    on the same page never collide.
+
+   DESIGN TOKENS — kept intentionally in sync with module-tree-explorer.css:
+     Primary accent  : #4f46e5  (indigo-600)
+     Accent light    : #ede9fe  (indigo-100)
+     Accent hover-bg : #e0e7ff  (indigo-100)
+     Accent border   : #a5b4fc  (indigo-300)
+     Danger          : #dc2626  (red-600)
+     Restore/safe    : #065f46  (emerald-800)
+     Trash-active    : #fef3c7 / #b45309  (amber-100 / amber-700)
+     Border          : #e1e4e8
+     Background      : #f5f7fa
+     Text primary    : #1a1f36
+     Text body       : #374151
+     Text muted      : #9ca3af
+   If you change any of these here, update module-tree-explorer.css too.
    ============================================================ */
 
 /* ── Root container ──────────────────────────────────────────────────────── */
@@ -337,6 +352,96 @@
 .cex-context-menu-item svg {
   flex-shrink: 0;
   pointer-events: none;
+}
+
+.cex-context-menu-sep {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+/* ── Folder Properties dialog ───────────────────────────────────────────── */
+.cex-props-dlg {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  min-width: 280px;
+  max-width: 420px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.cex-props-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 8px 8px 0 0;
+}
+.cex-props-title {
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cex-props-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.cex-props-close:hover { color: #111827; }
+.cex-props-body {
+  padding: 16px 18px;
+}
+.cex-props-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+.cex-spin svg { animation: cex-spin 0.8s linear infinite; }
+@keyframes cex-spin { to { transform: rotate(360deg); } }
+.cex-props-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cex-props-table th {
+  text-align: left;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 5px 10px 5px 0;
+  white-space: nowrap;
+}
+.cex-props-table td {
+  text-align: right;
+  color: #111827;
+  font-weight: 600;
+  padding: 5px 0;
+}
+.cex-props-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 6px;
+}
+.cex-props-section-recursive {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
 }
 
 
