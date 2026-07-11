@@ -294,6 +294,8 @@ export var FloriaDOM = {
      },
     injectCSSLink: function(anchorId, before, cssUrlHref)
      {
+       if (document.querySelector('link[rel="stylesheet"][href="' + cssUrlHref + '"]') != null)
+        return;
        const link = document.createElement("link");
        link.rel = "stylesheet";
        link.href = cssUrlHref;
