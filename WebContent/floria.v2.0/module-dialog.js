@@ -157,7 +157,7 @@ export function FloriaDialog(elementId)
        contents(this._md.id+"_MD_CNT"); // second element, i.e., the modalContent
       if (that._onLoadHandler != null)
        that._onLoadHandler();
-      window.FloriaTours?.enablePopupDialog(t);
+      window.FloriaHelp?.enablePopupDialog(t);
     }
    this.setContent = function(contents)
     {
@@ -173,7 +173,7 @@ export function FloriaDialog(elementId)
 //      console.trace();
       var that = this;
       
-      window.FloriaTours?.disablePopupDialog();
+      window.FloriaHelp?.disablePopupDialog();
 
       var topDlg = __DIALOGS.pop();
       if (topDlg != null && topDlg._md.id != this._md.id) // hide is being called twice on the same object
@@ -848,6 +848,65 @@ function _escFpd(str) {
           that._resolvePromise();
        }, 300);
      };
+  };
+
+
+ // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ // Floria Alert Simple
+ // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * FloriaAlertSimple
+ * A quick Yes/No confirmation dialog — a specific instantiation of the baseline FloriaAlert
+ * (see above), for whenever the app needs an "are you sure?"-style confirmation instead of
+ * the native, browser-styled confirm().
+ *
+ * @param {string}   message  - The question/warning to show the user (HTML allowed)
+ * @param {string}   yesLabel - Label for the confirming button (e.g. "Delete", "Yes")
+ * @param {string}   noLabel  - Label for the dismissing button (e.g. "Cancel", "No")
+ * @param {Function} onYes    - Called only when the user clicks the "yes" button.
+ *
+ * @example
+ *   new FloriaAlertSimple('Delete this rule? This cannot be undone.', 'Delete', 'Cancel', () => {
+ *     doTheDelete();
+ *   }).show();
+ */
+ export function FloriaAlertSimple(message, subMessage, yesLabel, noLabel, onYes)
+  {
+    // Stable ids — unique per instance so multiple confirmations can coexist (FloriaAlert
+    // itself supports several concurrently-visible '.floriaAlertBox' instances sharing one
+    // overlay — see FloriaAlert.close() above).
+    var uid   = 'fas_' + Math.random().toString(36).slice(2, 9);
+    var yesId = uid + '_yes';
+    var noId  = uid + '_no';
+
+    // By convention, dialog buttons in this app use the "buttonLogin smallerBlue" classes
+    // (see module-tours.js's doAlert() for the reference usage this was modeled after).
+    var html = `<DIV class="floriaAlertSimpleMessage">${message}</DIV>
+                ${subMessage==null?'':'<DIV class="floriaAlertSimpleSubMessage">'+subMessage+'</DIV>'}
+                <BR><BR>
+                <CENTER style="white-space: nowrap;">
+                  <BUTTON id="${yesId}" class="buttonLogin smallerBlue" style="display:inline-block;width:7em;">${yesLabel || 'Yes'}</BUTTON>
+                  &nbsp;&nbsp
+                  <BUTTON id="${noId}" class="buttonLogin smallerBlue" style="display:inline-block;width:7em;">${noLabel  || 'No' }</BUTTON>
+                </CENTER>
+               `;
+             
+
+    var alert = new FloriaAlert(html);
+
+    /** Opens the dialog modally. @returns {Promise<void>} resolves once the dialog is closed (either way). */
+    this.show = function()
+     {
+       return alert.show(function(e, btn)
+        {
+          if (btn.id === yesId && typeof onYes === 'function')
+           onYes();
+          return true; // Yes or No, either choice closes the dialog
+        });
+     };
+
+    this.close = function() { alert.close(); };
   };
 
 
