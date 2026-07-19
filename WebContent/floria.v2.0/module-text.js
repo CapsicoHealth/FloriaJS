@@ -22,88 +22,94 @@ import { FloriaCollections } from "./module-collections.js";
 // String extensions
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+if (!String.prototype.trim)
+  String.prototype.trim = function()
+  {
+    return this.replace(TextUtil.REGEX_TRIM, "");
+  };
 
-  if (!String.prototype.trim)
-    String.prototype.trim = function()
-    {
-      return this.replace(TextUtil.REGEX_TRIM, "");
-    };
+if (!String.prototype.endsWith)
+  String.prototype.endsWith = function(str)
+  {
+    return this.match(str + "$") != null;
+  };
 
-  if (!String.prototype.endsWith)
-    String.prototype.endsWith = function(str)
-    {
-      return this.match(str + "$") != null;
-    };
+if (!String.prototype.startsWith)
+  String.prototype.startsWith = function(str)
+  {
+    return this.match("^" + str) == str;
+  };
 
-  if (!String.prototype.startsWith)
-    String.prototype.startsWith = function(str)
-    {
-      return this.match("^" + str) == str;
-    };
+if (!String.prototype.hashValue)
+String.prototype.hashValue = function()
+ { // taken from https://github.com/darkskyapp/string-hash/blob/master/index.js
+    var hash = 5381;
+    var i    = str.length;
+    while(i)
+      hash = (hash * 33) ^ str.charCodeAt(--i)
   
-  if (!String.prototype.hashValue)
-  String.prototype.hashValue = function()
-   { // taken from https://github.com/darkskyapp/string-hash/blob/master/index.js
-      var hash = 5381;
-      var i    = str.length;
-      while(i)
-        hash = (hash * 33) ^ str.charCodeAt(--i)
-    
-      /* JavaScript does bitwise operations (like XOR, above) on 32-bit signed
-       * integers. Since we want the results to be always positive, convert the
-       * signed int to an unsigned by doing an unsigned bitshift. */
-      return hash >>> 0;
-   }
+    /* JavaScript does bitwise operations (like XOR, above) on 32-bit signed
+     * integers. Since we want the results to be always positive, convert the
+     * signed int to an unsigned by doing an unsigned bitshift. */
+    return hash >>> 0;
+ }
 
-  if (!String.prototype.isEmpty)
-    String.prototype.isEmpty = function()
+if (!String.prototype.isEmpty)
+  String.prototype.isEmpty = function()
+  {
+    for (var i = 0; i < this.length; ++i)
     {
-      for (var i = 0; i < this.length; ++i)
-      {
-        var c = this[i];
-        if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
-          return false;
-      }
-      return true;
-    };
-
-  if (!String.prototype.printFuncParam)
-    String.prototype.printFuncParam = function()
-    {
-      return this.replace(TextUtil.REGEX_SL, "\\\\").replace(TextUtil.REGEX_DQ, "&quot;").replace(TextUtil.REGEX_SQ, "\\\'");
-    };
-
-  if (!String.prototype.printHtmlAttrValue)
-    String.prototype.printHtmlAttrValue = function()
-    {
-      return this.replace(TextUtil.REGEX_SL, "\\\\").replace(TextUtil.REGEX_DQ, "&quot;");
-    };
-
-  if (!String.prototype.highlight)
-    String.prototype.highlight = function(Regex, ClassName)
-    {
-      return this.replace(Regex, '<SPAN class="' + ClassName + '">$1</SPAN>');
+      var c = this[i];
+      if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
+        return false;
     }
-  if (!String.prototype.getMatchList)
-    String.prototype.getMatchList = function(Regex)
-      {
-        var MatchList = new FloriaCollections.SortedStringArray();
-        while (true)
-         {
-           var Matches = Regex.exec(this);
-           if (Matches == null)
-            break;
-           MatchList.add(Matches[1]);
-         }
-        return MatchList.A;
-      }
+    return true;
+  };
 
-  if (!String.prototype.capitalizeAll)
-    String.prototype.capitalizeAll = function()
-      {
-        return this.toLowerCase().replace(/\b\w/g, function(char) { return char.toUpperCase()});
-      }
+if (!String.prototype.printFuncParam)
+  String.prototype.printFuncParam = function()
+  {
+    return this.replace(TextUtil.REGEX_SL, "\\\\").replace(TextUtil.REGEX_DQ, "&quot;").replace(TextUtil.REGEX_SQ, "\\\'");
+  };
 
+if (!String.prototype.printHtmlAttrValue)
+  String.prototype.printHtmlAttrValue = function()
+  {
+    return this.replace(TextUtil.REGEX_SL, "\\\\").replace(TextUtil.REGEX_DQ, "&quot;");
+  };
+
+if (!String.prototype.highlight)
+  String.prototype.highlight = function(Regex, ClassName)
+  {
+    return this.replace(Regex, '<SPAN class="' + ClassName + '">$1</SPAN>');
+  }
+if (!String.prototype.getMatchList)
+  String.prototype.getMatchList = function(Regex)
+    {
+      var MatchList = new FloriaCollections.SortedStringArray();
+      while (true)
+       {
+         var Matches = Regex.exec(this);
+         if (Matches == null)
+          break;
+         MatchList.add(Matches[1]);
+       }
+      return MatchList.A;
+    }
+
+if (!String.prototype.capitalizeAll)
+  String.prototype.capitalizeAll = function()
+    {
+      return this.toLowerCase().replace(/\b\w/g, function(char) { return char.toUpperCase()});
+    }
+    
+if (!String.prototype.capitalizeFirstLetter)
+ String.prototype.capitalizeFirstLetter = function()
+    {
+      if (this.length == 0)
+       return this;
+      return this.trim().charAt(0).toUpperCase() + this.slice(1);
+    }
 
 var TextUtil = {
   REGEX_DQ : /\"/g

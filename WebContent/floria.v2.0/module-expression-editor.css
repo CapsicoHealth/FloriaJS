@@ -43,7 +43,7 @@
   width: 100%;
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
+  font-size: 1em;
   color: #1a1f36;
 }
 
@@ -70,13 +70,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.85em;
   font-weight: 700;
   flex-shrink: 0;
   background: #ede9fe;
 }
 
-.fee-help-body { max-width: 320px; font-size: 12px; line-height: 1.5; }
+.fee-help-body { 
+  max-width: 320px;
+  font-size: 0.9em;
+  line-height: 1.25;
+  background: #F0F0F0;
+  padding: 1em;
+}
 .fee-help-body b { color: #4f46e5; }
 
 /* ── Builder: rows / groups ───────────────────────────────────────────── */
@@ -111,7 +117,7 @@
 
 .fee-op-btn {
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: 0.85em;
   font-weight: 600;
   border: none;
   background: #fff;
@@ -187,7 +193,7 @@
 .fee-switch-disabled { cursor: default; }
 
 .fee-not-toggle-label {
-  font-size: 12px;
+  font-size: 0.85em;
   font-weight: 600;
   color: #15803d;
   white-space: nowrap;
@@ -207,7 +213,7 @@
   background: none;
   cursor: pointer;
   color: #9ca3af;
-  font-size: 12px;
+  font-size: 0.85em;
   line-height: 1;
   padding: 2px 4px;
 }
@@ -219,7 +225,7 @@
   background: #fff;
   border-radius: 6px;
   padding: 4px 9px;
-  font-size: 12px;
+  font-size: 0.85em;
   cursor: pointer;
   color: #374151;
   white-space: nowrap;
@@ -243,7 +249,7 @@
 
 .fee-select {
   padding: 4px 6px;
-  font-size: 13px;
+  font-size: 0.9em;
   border: 1px solid #e1e4e8;
   border-radius: 6px;
   background: #fff;
@@ -268,7 +274,7 @@
   color: #4338ca;
   border-radius: 12px;
   padding: 2px 4px 2px 9px;
-  font-size: 12px;
+  font-size: 0.85em;
   white-space: nowrap;
 }
 
@@ -277,7 +283,7 @@
   background: none;
   color: #4338ca;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.9em;
   line-height: 1;
   padding: 2px 4px;
 }
@@ -286,7 +292,7 @@
 .fee-value-input {
   border: none;
   outline: none;
-  font-size: 13px;
+  font-size: 0.9em;
   padding: 3px 4px;
   min-width: 120px;
   flex: 1 1 auto;
@@ -302,14 +308,14 @@
   gap: 6px;
 }
 .fee-values-picker a {
-  font-size: 13px;
+  font-size: 0.9em;
   font-weight: 600;
   color: #4f46e5;
   text-decoration: none;
 }
 .fee-values-picker a:hover { text-decoration: underline; }
 .fee-values-picker .codesSelectionBox {
-  font-size: 12px;
+  font-size: 0.85em;
   color: #374151;
 }
 
@@ -327,13 +333,55 @@
   background: #fbfbff;
 }
 
-.fee-group-actions, .fee-empty-list {
+.fee-add-buttons {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 8px;
 }
-.fee-group-actions { margin-bottom: 6px; }
-.fee-empty-list { padding: 10px 2px; }
+
+/* ── Empty-tree intro blurb ────────────────────────────────────────────
+   Shown only above a totally empty ROOT tree (see module-expression-editor.js
+   _renderIntroBlurb), right before the always-visible +Condition/+Group
+   buttons, so a first-time user knows what those buttons — and the rest of
+   the editor — actually do. */
+.fee-intro-blurb {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9em;
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.fee-intro-blurb b { color: #1d4ed8; }
+.fee-intro-blurb p { margin: 0 0 6px; }
+.fee-intro-blurb p:last-child { margin-bottom: 0; }
+.fee-intro-blurb ul { margin: 0; padding-left: 18px; }
+.fee-intro-blurb li { margin: 2px 0; }
+
+/* ── "Copied!" checkmark flash (Preview/JSON tabs' Copy buttons) ──────────
+   Briefly appears right next to the button on click, then fades out quickly
+   — see module-expression-editor.js's _flashCopiedCheckmark(). Re-triggering
+   the animation (via classList remove/reflow/add) on repeat clicks restarts
+   it from full opacity each time. */
+.fee-copied-check {
+  display: inline-flex;
+  margin-left: 6px;
+  color: #16a34a;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+}
+.fee-copied-check-show {
+  animation: fee-copied-fade 1s ease-out forwards;
+}
+@keyframes fee-copied-fade {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 /* ── Preview tab ───────────────────────────────────────────────────────── */
 .fee-preview-toolbar {
@@ -349,7 +397,7 @@
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.9em;
   margin-bottom: 8px;
   line-height: 1.4;
 }
@@ -367,16 +415,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 0.8em;
   font-weight: 700;
   flex-shrink: 0;
   margin-top: 1px;
 }
 
-.fee-tooltip-body { max-width: 280px; font-size: 12px; line-height: 1.5; }
+.fee-tooltip-body { max-width: 280px; font-size: 0.85em; line-height: 1.5; }
 
 .fee-section-label {
-  font-size: 12px;
+  font-size: 0.85em;
   font-weight: 600;
   color: #6b7280;
   text-transform: uppercase;
@@ -391,7 +439,7 @@
   padding: 12px 14px;
   border-radius: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.9em;
   line-height: 1.7;
   overflow-x: auto;
   white-space: pre;
@@ -402,6 +450,7 @@
 .fee-tok-kw   { color: #fca5a5; font-weight: 600; }
 .fee-tok-punc { color: #94a3b8; }
 .fee-tok-cmt  { color: #64748b; font-style: italic; }
+.fee-tok-descr{ color: #94a3b8; }
 
 .fee-json {
   background: #f9fafb;
@@ -409,7 +458,7 @@
   border-radius: 8px;
   padding: 12px 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.85em;
   overflow-x: auto;
   white-space: pre;
 }
@@ -421,7 +470,7 @@
 
 .fee-empty-msg {
   color: #9ca3af;
-  font-size: 13px;
+  font-size: 0.9em;
   padding: 20px;
   text-align: center;
 }
@@ -429,5 +478,5 @@
 .fee-hint-list {
   margin: 4px 0 0 0;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: 0.85em;
 }

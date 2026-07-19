@@ -145,6 +145,10 @@ function getFieldMarkup(parentD, d, elementId, pageId, rowId, subRowId, groupId,
     Str+='<SPAN id="'+elementId+'_F_CONTAINER"></SPAN>';
    else if (d.type=="rating")
     Str+=FloriaControls.Rating.gen(null, formElementIds, "from lowest to highest", d.max, null, v);
+   else if (d.type=="custom")
+    { /* Nothing to emit here: rendering is deferred to the CustomRendererRegistry (see fillField()), which will
+         populate the placeholder TD (id='...+"_PH"+xid) with whatever markup/input the renderer needs. */
+    }
    
    if (d.type!="hidden")
     {
@@ -234,7 +238,7 @@ function getGroupMarkup(d, elementId, pageId, rowId, data, edgeFunc, heading)
    return Str;
  }
 
-function fillField(d, elementId, pageId, rowId, subRowId, descriptions, data, pickers, groupCount)
+function fillField(d, elementId, pageId, rowId, subRowId, descriptions, data, pickers, groupCount, customRenderers)
  {
    var fieldName = d.name+(groupCount!=null?"_"+groupCount : subRowId!=null?"_"+subRowId : "");
    var xid = rowId+(subRowId==null?'':'_'+subRowId);
@@ -266,6 +270,13 @@ function fillField(d, elementId, pageId, rowId, subRowId, descriptions, data, pi
       let formElementIds = [ elementId+'_F', fieldName];
       FloriaControls.ComboBox(elementId+'_F_CONTAINER', formElementIds, d.values, d.placeholder, v);
     }
+   else if (d.type == "custom")
+    {
+      var v = data==null?null:data[d.name];
+      if (v == null)
+       v = d.defaultValue;
+      customRenderers.push({elementId:elementId+"_"+pageId+"_PH"+xid, name: fieldName, rendererName: d.customRenderer, params: d.params, value: v});
+    }
    else
     {
 //      console.log("Picker "+d.type+" on "+fieldName+"= ", data==null?null:data[fieldName]);
@@ -282,7 +293,7 @@ function fillField(d, elementId, pageId, rowId, subRowId, descriptions, data, pi
     }
  }
 
-function fillGroup(d, elementId, pageId, rowId, descriptions, data, pickers)
+function fillGroup(d, elementId, pageId, rowId, descriptions, data, pickers, customRenderers)
  {
    var values = data[d.name];
    var groupCount = -1;
@@ -294,14 +305,14 @@ function fillGroup(d, elementId, pageId, rowId, descriptions, data, pickers)
         continue;
        ++groupCount;
        for (var k = 0; k < d.group.length; ++k)
-        fillField(d.group[k], elementId, pageId, rowId, groupCount*d.group.length+k, descriptions, val, pickers, groupCount);
+        fillField(d.group[k], elementId, pageId, rowId, groupCount*d.group.length+k, descriptions, val, pickers, groupCount, customRenderers);
     }
    if (groupCount == -1)
     for (var j = 0; j < 2; ++j)
      {
        ++groupCount;
        for (var k = 0; k < d.group.length; ++k)
-        fillField(d.group[k], elementId, pageId, rowId, groupCount*d.group.length+k, descriptions, null, pickers, groupCount);
+        fillField(d.group[k], elementId, pageId, rowId, groupCount*d.group.length+k, descriptions, null, pickers, groupCount, customRenderers);
      }
  };
 
@@ -848,14 +859,19 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
                     var Str = getGroupUnitMarkup(d, that._elementId, that._pageId, parts[1], e.rows.length, null, that._defaultEdgeFunc, true, d.maxCount==1);
                     FloriaDOM.addRow(e, null, Str, e.rows.length, "top");
                     var Pickers = [];
+                    var CustomRenderers = [];
                     for (var k = 0; k < d.group.length; ++k)
-                      {
-                        fillField(d.group[k], that._elementId, that._pageId, parts[1], d.group.length*(e.rows.length-1)+k, that._descriptions, null, Pickers, e.rows.length-1);
-                      }
-                    if (Pickers.length > 0)
-                      {
-                        FloriaFactories.PickerRegistry.render(Pickers, null, null);
-                      }
+                       {
+                         fillField(d.group[k], that._elementId, that._pageId, parts[1], d.group.length*(e.rows.length-1)+k, that._descriptions, null, Pickers, e.rows.length-1, CustomRenderers);
+                       }
+                     if (Pickers.length > 0)
+                       {
+                         FloriaFactories.PickerRegistry.render(Pickers, null, null);
+                       }
+                     if (CustomRenderers.length > 0)
+                       {
+                         FloriaFactories.CustomRendererRegistry.render(CustomRenderers);
+                       }
                   }
                }
              else if (parts.length == 3 && parts[0] == "DEL") 
@@ -885,13 +901,14 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
 //          console.log("FORM -> onchange handler not set because _liveOnChange is not true.")            
         }
       var Pickers = [];
+      var CustomRenderers = [];
       for (var i = 0; i < p.length; ++i)
        {
          var d = p[i];
          if (d.group != null)
-          fillGroup(d, this._elementId, this._pageId, i, this._descriptions, this._data, Pickers);
+          fillGroup(d, this._elementId, this._pageId, i, this._descriptions, this._data, Pickers, CustomRenderers);
          else
-          fillField(d, this._elementId, this._pageId, i, null, this._descriptions, this._data, Pickers);
+          fillField(d, this._elementId, this._pageId, i, null, this._descriptions, this._data, Pickers, null, CustomRenderers);
        }
       if (Pickers.length > 0)
         {
@@ -905,6 +922,15 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
                                                      FloriaDOM.fireEvent(that._elementId+'_F', "change"); 
                                                   } : null
                                                );
+        }
+      if (CustomRenderers.length > 0)
+        {
+          // Reuse the same "_pickersLoading" gate: updatePage() already waits on it before reading data back
+          // from the DOM, and both Pickers and CustomRenderers populate placeholders asynchronously.
+          ++this._pickersLoading;
+          FloriaFactories.CustomRendererRegistry.render(CustomRenderers)
+            .catch(function(e) { console.error(e); })
+            .then(function() { --that._pickersLoading; });
         }
     }; 
    
@@ -968,7 +994,7 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
                          v = FloriaControls.GeneralControl.get(formElementIds, true);
                         else if (d2.type=="rating")
                          v = FloriaControls.Rating.get(formElementIds);
-                        else if (d2.type=="text" || d2.type=="hidden" || d2.type=="textarea" || d2.type=="number" || d2.type=="radio" || d2.type=="date" || d2.type=="dropdown" || d2.type=="combo")
+                        else if (d2.type=="text" || d2.type=="hidden" || d2.type=="textarea" || d2.type=="number" || d2.type=="radio" || d2.type=="date" || d2.type=="dropdown" || d2.type=="combo" || d2.type=="custom")
                          {
                            v = f[d2.name+'_'+j];
                            if (v != null)
@@ -1019,7 +1045,7 @@ export var FloriaForms = function(elementId, data, formDefs, edgeColumnCount, pr
                    else
                     console.error("Cannot find form element "+d.name);
                  }
-               else if (d.type=="text" || d.type=="hidden" || d.type=="textarea" || d.type=="number" || d.type=="int" || d.type=="boolean" || d.type=="radio" || d.type=="date")
+               else if (d.type=="text" || d.type=="hidden" || d.type=="textarea" || d.type=="number" || d.type=="int" || d.type=="boolean" || d.type=="radio" || d.type=="date" || d.type=="custom")
                  {
                    if (f[d.name] != null)
                     this._data[d.name] = f[d.name].value;
@@ -1690,4 +1716,3 @@ FloriaForms.paintFieldList = function(elementId, fieldDefs, callbackFunc, editCa
  {
    return data == null || data.length==0 || data.indexOf(value)!=-1;
  }
-

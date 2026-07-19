@@ -63,9 +63,10 @@
 <p>
   Two independent editor instances demonstrating the component's configurable vocabulary (vars + functions).
   They share the same JSON tree shape and the same tautology/contradiction analyzer — only the configuration differs.
-  Each instance's own <strong>Editor</strong> / <strong>Preview</strong> / <strong>JSON</strong> tabs (built into the
-  component itself — see FloriaExpressionEditor.render()) are the only UI needed to build, review, and inspect the
-  expression; nothing extra is wired up here in the demo page.
+  Each instance's own <strong>Editor</strong> / <strong>Preview</strong> tabs (built into the
+  component itself — see FloriaExpressionEditor.render()) are the only UI needed to build and review the
+  expression; nothing extra is wired up here in the demo page. Instance 1 also opts into the optional
+  <strong>JSON</strong> tab (<code>showTabJSON:true</code>, off by default) to show the raw tree.
 </p>
 
 <!-- ══════════════════════════════════════════════════════════════════════════
@@ -75,7 +76,11 @@
 <p>
   Replicates the <code>_anchorCodesTree</code> vocabulary from <code>COHORT_MARTS_DATA.FindJourneys3</code>.
   Variables: <em>DxPrimary, DxSecondaries, DxAll, CptHcpcs, Drg, PrcPrimary, PrcSecondaries, PrcAll</em>.
-  Functions: <em>like, in</em>.
+  Functions: <em>like, in</em>. Each variable is backed by a real
+  <code>FloriaFactories.PickerRegistry</code> Picker (<code>DxCode</code>/<code>HCPCSCode</code>/<code>DrgCode</code>/
+  <code>PrcCode</code>) instead of free-typed values, and a <code>descriptionLookup</code> handler is wired up so
+  the <strong>Preview</strong> tab shows each code's human-readable description (bulk-fetched once, then cached for
+  the lifetime of this editor instance) instead of opaque codes — switch to the Preview tab to see it in action.
 </p>
 <div id="editor-medical" class="demo-card">
 </div>
@@ -100,6 +105,7 @@
 <script type="module">
 
 import { FloriaExpressionEditor } from './module-expression-editor.js';
+import { FloriaAjax             } from './module-ajax.js';
 import {  } from '/static/js/pickers.js'
 
 // ── Instance 1: Medical codes ──────────────────────────────────────────────
@@ -113,6 +119,7 @@ const medicalVars = [
   ,{ name: 'PrcPrimary'    , label: 'Procedure Primary'         , picker: 'PrcCode' }
   ,{ name: 'PrcSecondaries', label: 'Procedure Secondaries'     , picker: 'PrcCode' }
   ,{ name: 'PrcAll'        , label: 'Procedure All'             , picker: 'PrcCode' }
+  ,{ name: 'Txt'           , label: 'Text'                      }
 ];
 
 const medicalFunctions = [
@@ -120,20 +127,72 @@ const medicalFunctions = [
   ,{ name: 'in'  , label: 'in (exact match)'    }
 ];
 
+// Maps each medical var to the "codeType" bucket expected by the /codesmaster/codes/lookup
+// endpoint (same endpoint/shape as CohortHelpers.buildCodesDictionary in
+// module-cohort-helpers.js) — this mapping is entirely application-layer knowledge, which is
+// exactly why it lives here in the demo/caller rather than inside the Floria component itself
+// (see FloriaExpressionEditor's "descriptionLookup" config doc).
+const CODE_TYPE_BY_VAR = {
+   DxPrimary: 'icdDx', DxSecondaries: 'icdDx', DxAll: 'icdDx'
+  ,CptHcpcs : 'hcpcs'
+  ,Drg      : 'drg'
+  ,PrcPrimary: 'icdPr', PrcSecondaries: 'icdPr', PrcAll: 'icdPr'
+};
+
+// descriptionLookup handler: receives ONLY the var/code pairs the editor hasn't already cached
+// (see module header docs), does ONE bulk round-trip to the server, and fills in each value's
+// "descr" in place. A "like" prefix pattern (e.g. "Z192%") simply won't match any row returned
+// by the lookup, so it's left with descr:null — the editor then automatically falls back to the
+// original flat/quoted rendering for that particular condition, exactly as designed.
+async function medicalDescriptionLookup(entries)
+ {
+   const codesByType = { hcpcs: [], icdDx: [], icdPr: [], drg: [], ndc: [] };
+   entries.forEach(e => {
+       const codeType = CODE_TYPE_BY_VAR[e.var];
+       if (codeType != null)
+        codesByType[codeType].push(...e.values.map(v => v.val));
+     });
+
+   const url = "/web/svc/codesmaster/codes/lookup"
+       + "?codesHcpcs="  + encodeURIComponent(codesByType.hcpcs.join(","))
+       + "&codesIcdDx="  + encodeURIComponent(codesByType.icdDx.join(","))
+       + "&codesIcdDxFull=1"
+       + "&codesIcdPr="  + encodeURIComponent(codesByType.icdPr.join(","))
+       + "&codesDrg="    + encodeURIComponent(codesByType.drg.join(","))
+       + "&codesNdc="    + encodeURIComponent(codesByType.ndc.join(","));
+   const resp = await FloriaAjax.jsonSyncFetch(url);
+
+   function dictFor(arr) { const m = {}; (arr || []).forEach(r => { m[r.c] = r.d; }); return m; }
+   const descrByType = {
+      hcpcs: dictFor(resp?.codesHcpcs), icdDx: dictFor(resp?.codesIcdDx)
+     ,icdPr: dictFor(resp?.codesIcdPr), drg  : dictFor(resp?.codesDrg)
+     ,ndc  : dictFor(resp?.codesNdc)
+    };
+
+   entries.forEach(e => {
+       const codeType = CODE_TYPE_BY_VAR[e.var];
+       if (codeType == null)
+        return; // var not backed by a real code dictionary — every value stays descr:null
+       e.values.forEach(v => { v.descr = descrByType[codeType][v.val] || null; });
+     });
+ }
+
 // A sample tree that mirrors the reference example in the BigQuery installer SQL:
-//   DxAll like ["Z192%"]
+//   DxAll like ["Z19.2"]
 //   OR CptHcpcs in ["A9607"]
-//   OR ( CptHcpcs in ["J9219",...] AND NOT DxAll like ["R9721%"] )
+//   OR ( CptHcpcs in ["J9219",...] AND NOT DxAll like ["R9721"] )
 const medicalSampleTree = [
-   {             "expr": { "var": "DxAll",    "f": "like", "vals": ["Z192%"] } }
+   {             "expr": { "var": "DxAll",    "f": "like", "vals": ["Z19.2"] } }
   ,{ "op": "or", "expr": { "var": "CptHcpcs", "f": "in",   "vals": ["A9607"] } }
   ,{ "op": "or",
      "sub": [
         {                          "expr": { "var": "CptHcpcs", "f": "in",   "vals": ["J9219","J9218","J9217","J1954","J1952","J1951","J1950"] } }
-       ,{ "op": "and", "not": true, "expr": { "var": "DxAll",    "f": "like", "vals": ["R9721%"] } }
+       ,{ "op": "and", "not": true, "expr": { "var": "DxAll",    "f": "like", "vals": ["R97.21"] } }
+       ,{ "op": "and", "not": false, "expr": { "var": "Txt",    "f": "like", "vals": ["abc","def"] } }
      ]
    }
 ];
+
 
 // Minimal domain module for the medical vocabulary:
 //   • "in" is always a subset relationship of "like" prefix-matching the same var, so:
@@ -163,6 +222,8 @@ const editor1 = new FloriaExpressionEditor('editor-medical', {
   ,functions   : medicalFunctions
   ,initialTree : medicalSampleTree
   ,domain      : medicalDomain
+  ,descriptionLookup: medicalDescriptionLookup
+  ,showTabJSON : true // demonstrates the optional "JSON" tab (off by default)
 });
 editor1.render();
 
@@ -170,7 +231,8 @@ editor1.render();
 // ── Instance 2: Text-matching test cases ───────────────────────────────────
 
 const textVars = [
-   { name: 'txt', label: 'Text Content' }
+   { name: 'txt'  , label: 'Text Content' }
+  ,{ name: 'tools', label: 'Tool Call' }
 ];
 
 const textFunctions = [
@@ -214,6 +276,7 @@ const editor2 = new FloriaExpressionEditor('editor-text', {
   ,functions   : textFunctions
   ,initialTree : textSampleTree
   ,domain      : textDomain
+  ,initialTab  : 'Preview' // pre-loaded with a sample tree, so Preview is more useful than the empty-looking Editor tab
 });
 editor2.render();
 

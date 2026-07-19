@@ -294,8 +294,7 @@ export function FloriaTooltipDialog(elementId, content, arrow, manual, additiona
       if (manual != true)
        {
          FloriaDOM.addEvent(that._e , "click"     , function(e, event, target) { that._clickHandler(event); }, null, true);
-         FloriaDOM.addEvent(that._tt, "mouseleave", function(e, event, target) { setTimeout(function(){that.hide(event);},250); }, null, true);
-//         FloriaDOM.addEvent(that._tt, "click"     , function(e, event, target) { setTimeout(function(){that.hide(event);},250); }, null, true);
+         FloriaDOM.addEvent(that._tt, "mouseleave", function(e, event, target) { setTimeout(function(){that.hide(event);},500); }, null, true);
        }
        
       that.setSize = function(w, h)

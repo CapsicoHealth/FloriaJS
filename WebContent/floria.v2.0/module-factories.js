@@ -1497,10 +1497,55 @@ PickerRegistry.deleteTemplate = function(elementId, refnum)
    return false;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Custom Renderers (Forms2 "type":"custom" fields)
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * A CustomRenderer lets a Forms2 field ("type":"custom", "customRenderer":"<registered name>") take over rendering
+ * completely. Unlike Pickers, Forms2 does NOT pre-create an input for these fields: the renderer owns the DOM under
+ * divId entirely, including creating whatever input element(s) it needs (with name=fieldName so it participates in
+ * the native <FORM> element collection Forms2 already uses for read-back).
+ *
+ * The CustomRenderer MUST provide:
+ *   - init: the standard FloriaFactories init method, receiving the field's "params".
+ *   - render(divId, fieldName, value, params): async. Renders (or re-renders) the field's UI into the DOM element
+ *          denoted by divId, and ensures an element named fieldName exists so Forms2 can read back its .value. 
+ *          'value' is whatever was previously stored (a plain, opaque string - e.g. JSON - since Forms2 treats
+ *          "custom" fields as simple, transparent string I/O, with no additional format/convention imposed).
+ *          If the renderer's UI can change without a native input/select/textarea "change" event bubbling up on its
+ *          own (e.g. a hidden input driven by a custom widget), the renderer is responsible for dispatching a
+ *          bubbling 'change' event on its input so Forms2's liveOnChange mode is notified.
+ */
+var CustomRendererRegistry = new FactoryRegistry("CustomRenderer", ["render"]);
+
+CustomRendererRegistry.render = function(rendererDefs)
+ {
+   if (rendererDefs == null || rendererDefs.length == 0)
+    return Promise.resolve();
+
+   var promises = [];
+   for (var i = 0; i < rendererDefs.length; ++i)
+    {
+      var d = rendererDefs[i];
+      console.log("Creating new instance of custom renderer "+d.rendererName);
+      var instance = CustomRendererRegistry.getInstance({name: d.rendererName, params: d.params});
+      if (instance == null)
+       {
+         FloriaDOM.setInnerHTML(d.elementId, '<img src="/static/img/error.gif" height="20px"> Custom renderer \''+d.rendererName+'\' not found or initialized properly.');
+         continue;
+       }
+      try {
+        promises.push(Promise.resolve(instance._obj.render(d.elementId, d.name, d.value, d.params)));
+      } catch(e) { console.error(e); }
+    }
+   return Promise.all(promises);
+ };
+
 if (window.FloriaFactories == null)
  window.FloriaFactories = { };
 window.FloriaFactories.TileRegistry = TileRegistry;
 window.FloriaFactories.PickerRegistry = PickerRegistry;
+window.FloriaFactories.CustomRendererRegistry = CustomRendererRegistry;
 
 
 
@@ -1510,5 +1555,6 @@ export var FloriaFactories = { FactoryRegistry: FactoryRegistry
                              , RowPainterRegistry: RowPainterRegistry
                              , TileRegistry: TileRegistry
                              , PickerRegistry: PickerRegistry
+                             , CustomRendererRegistry: CustomRendererRegistry
                              };
 

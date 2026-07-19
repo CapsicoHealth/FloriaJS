@@ -62,6 +62,18 @@ FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-
 //     functions  : [ { name, label } ... ]   – REQUIRED, the selectable "f" vocabulary
 //     initialTree: [...]                     – optional, a tree in the shape above (default: [])
 //     readOnly   : boolean                   – optional, hides add/delete/move controls (default: false)
+//     showTabJSON: boolean                   – optional, shows a "JSON" tab (the raw tree, for
+//                                              developers/integrators) alongside Editor/Preview
+//                                              (default: false — hidden, since end users have no
+//                                              business seeing/copying raw JSON)
+//     initialTab : number|string             – optional, which tab is active on first render:
+//                                              either a numeric index (0-based, same tabs order as
+//                                              rendered — "Editor","Preview", and "JSON" only if
+//                                              showTabJSON is true) or a tab's label as a
+//                                              case-insensitive string (e.g. "Preview") — handy
+//                                              when the caller already knows there's data worth
+//                                              previewing rather than defaulting into the (empty)
+//                                              Editor tab (default: 0, the "Editor" tab)
 //     onChange   : function(tree)            – optional, called after every mutation
 //     domain     : { relate(exprA, exprB) }  – optional, pluggable domain module for the tautology/
 //                                              contradiction checker. relate() is only ever called for
@@ -71,6 +83,26 @@ FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-
 //                                              else (no known relationship). Without a domain module the
 //                                              checker still catches purely *structural* issues (the same
 //                                              leaf repeated both plain and negated somewhere in the tree).
+//     descriptionLookup: async function(entries) – optional, and DELIBERATELY the only bridge between this
+//                                              reusable framework and any application-layer "what does this
+//                                              code actually mean" lookup (e.g. CohortHelpers.buildCodesDictionary
+//                                              in module-cohort-helpers.js) — Floria itself has no business
+//                                              knowing about medical codes, so it never fetches descriptions
+//                                              on its own. `entries` is an array of
+//                                              [ { var:"xxx", values:[ {val:"aaa", descr:null}, ... ] }, ... ]
+//                                              — one entry per var, containing only the codes NOT YET in this
+//                                              instance's own cache (deduplicated across the whole tree — a
+//                                              code used twice under the same var is only ever asked for
+//                                              once). The handler must fill in each value's "descr" (in
+//                                              place) and resolve its returned Promise when done; whatever
+//                                              it leaves behind (including leaving "descr" null for a code it
+//                                              can't describe) is cached forever, so the same var/code pair
+//                                              is never looked up again even if later removed and re-added
+//                                              to the expression. Only called when the Preview tab is shown
+//                                              AND at least one new/uncached code is present. Vars that never
+//                                              resolve any description at all (e.g. free-text vars, or a
+//                                              "like" prefix pattern instead of a discrete code) simply keep
+//                                              rendering their flat, quoted values list, unchanged.
 //   }
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -345,12 +377,13 @@ function _padStr(count, mode) { return FloriaText.multiple(mode === 'rich' ? '&n
 // 'rich' mode actually pastes into an arbitrary external app, which will almost never also be
 // sitting on a dark background.
 var _PP_RICH_STYLE = {
-   var : 'color:#0369a1'
-  ,func: 'color:#6d28d9'
-  ,str : 'color:#15803d'
-  ,kw  : 'color:#b91c1c;font-weight:700'
-  ,punc: 'color:#4b5563'
-  ,cmt : 'color:#6b7280;font-style:italic'
+   var  : 'color:#0369a1'
+  ,func : 'color:#6d28d9'
+  ,str  : 'color:#15803d'
+  ,kw   : 'color:#b91c1c;font-weight:700'
+  ,punc : 'color:#4b5563'
+  ,cmt  : 'color:#6b7280;font-style:italic'
+  ,descr: 'color:#6b7280'
  };
 
 // Wraps `text` in the right markup for one "token" (a keyword, a punctuation mark, a var/func
@@ -378,7 +411,7 @@ function _ppPrefix(item, isFirst)
    return prefix;
  }
 
-function _ppList(list, depth, vars, functions, mode)
+function _ppList(list, depth, vars, functions, mode, dict)
  {
    if (!Array.isArray(list) || list.length === 0)
     return [_indentStr(depth, mode)+_ppTok(mode, 'cmt', '// no conditions')];
@@ -394,11 +427,11 @@ function _ppList(list, depth, vars, functions, mode)
 
    var lines = [];
    for (var i = 0; i < list.length; ++i)
-    lines = lines.concat(_ppItem(list[i], prefixes[i], padWidth, depth, vars, functions, mode));
+    lines = lines.concat(_ppItem(list[i], prefixes[i], padWidth, depth, vars, functions, mode, dict));
    return lines;
  }
 
-function _ppItem(item, prefix, padWidth, depth, vars, functions, mode)
+function _ppItem(item, prefix, padWidth, depth, vars, functions, mode, dict)
  {
    var indent = _indentStr(depth, mode);
    var pad = _padStr(padWidth - prefix.length, mode);
@@ -407,25 +440,81 @@ function _ppItem(item, prefix, padWidth, depth, vars, functions, mode)
     {
       var open  = _ppTok(mode, 'punc', '(');
       var close = _ppTok(mode, 'punc', ')');
-      return [indent+kw+pad+open].concat(_ppList(item.sub, depth + 1, vars, functions, mode)).concat([indent+close]);
+      return [indent+kw+pad+open].concat(_ppList(item.sub, depth + 1, vars, functions, mode, dict)).concat([indent+close]);
     }
-   return [indent+kw+pad+_ppLeaf(item.expr, vars, functions, mode)];
+   return _ppLeafLines(item.expr, indent, kw, pad, padWidth, depth, vars, functions, mode, dict);
  }
 
-function _ppLeaf(expr, vars, functions, mode)
+// Returns one already-tokenized "code" or "code: description" line per value in expr.vals, or
+// null if NONE of them have a resolvable description — the null case is the signal for
+// _ppLeafLines to fall back to the plain/legacy single-line "var func [\"a\", \"b\"]" rendering.
+// `dict`, if given, is a { varName: { code: description|null } } lookup (see
+// FloriaExpressionEditor._descrCache) — deliberately optional/pluggable so this whole
+// code-description feature stays out of the framework's own concerns otherwise (see module
+// header config docs for "descriptionLookup").
+function _ppLeafValueLines(expr, dict, mode)
+ {
+   var vals = Array.isArray(expr.vals) ? expr.vals : [];
+   var varDict = dict ? dict[expr.var] : null;
+   if (varDict == null)
+    return null;
+   var anyDescr = vals.some(function(v) { return typeof varDict[v] === 'string' && varDict[v].length > 0; });
+   if (anyDescr !== true)
+    return null;
+   return vals.map(function(v) {
+       var codeTok = _ppTok(mode, 'str', _esc(v));
+       var d = varDict[v];
+       if (typeof d === 'string' && d.length > 0)
+        return codeTok + _ppTok(mode, 'punc', ': ') + _ppTok(mode, 'descr', _esc(d));
+       return codeTok;
+     });
+ }
+
+// Builds the line(s) for one leaf condition. Two shapes, chosen per-leaf (not per-var/globally —
+// see module header): if `dict` resolves a description for at least one of THIS leaf's values,
+// renders the richer "[code: description, ...]" block — the FIRST value inline right after the
+// opening "[" (same line as the var/func), every OTHER value vertically aligned under that first
+// value's column, and the closing "]" aligned with the opening "[" itself; otherwise (no dict at
+// all, or none of this leaf's values have a resolved description — e.g. a "like" prefix pattern
+// that isn't a real discrete code) falls back to the original flat, single-line, quoted-values
+// rendering, unchanged.
+function _ppLeafLines(expr, indent, kw, pad, padWidth, depth, vars, functions, mode, dict)
  {
    // Names (not labels) are the actual identifiers callers/backends deal with, so they're what's
    // shown here; the (often longer, friendlier) label is still available as a native tooltip —
    // see the "title" attributes below — for whoever needs the human-readable meaning.
    var varLabel  = _labelFor(vars, expr.var);
    var funcLabel = _labelFor(functions, expr.f);
-   var vals = Array.isArray(expr.vals) ? expr.vals : [];
-   if (mode === 'plain')
-    return expr.var+' '+expr.f+' ['+vals.map(function(v) { return '"'+v+'"'; }).join(', ')+']';
-   var sep = _ppTok(mode, 'punc', ', ');
-   var valsHtml = vals.map(function(v) { return _ppTok(mode, 'str', '"'+_esc(v)+'"'); }).join(sep);
-   return _ppTok(mode, 'var', _esc(expr.var), varLabel)+' '+_ppTok(mode, 'func', _esc(expr.f), funcLabel)+' '
-        + _ppTok(mode, 'punc', '[')+valsHtml+_ppTok(mode, 'punc', ']');
+   var varTok    = _ppTok(mode, 'var', _esc(expr.var), varLabel);
+   var funcTok   = _ppTok(mode, 'func', _esc(expr.f), funcLabel);
+
+   var valueLines = _ppLeafValueLines(expr, dict, mode);
+   if (valueLines == null)
+    {
+      var vals = Array.isArray(expr.vals) ? expr.vals : [];
+      if (mode === 'plain')
+       return [indent+kw+pad + expr.var+' '+expr.f+' ['+vals.map(function(v) { return '"'+v+'"'; }).join(', ')+']'];
+      var sep = _ppTok(mode, 'punc', ', ');
+      var valsHtml = vals.map(function(v) { return _ppTok(mode, 'str', '"'+_esc(v)+'"'); }).join(sep);
+      return [indent+kw+pad+varTok+' '+funcTok+' '+_ppTok(mode, 'punc', '[')+valsHtml+_ppTok(mode, 'punc', ']')];
+    }
+
+   // Visible/plain column width of "indent+kw+pad+var func [" — computed from PLAIN text
+   // lengths only (never from the tokenized strings above, which carry HTML markup in 'html'/
+   // 'rich' modes and would badly overcount). indent is always 2 visible chars per depth level
+   // (see _indentStr) and kw+pad together always sum to exactly padWidth visible chars (see
+   // _ppList) regardless of which sibling's own AND/OR/NOT prefix produced them — that's the
+   // whole point of that padding pass, and it's what lets every leaf/group in the same sibling
+   // list line up regardless of its own prefix width.
+   var headLen = (depth * 2) + padWidth + expr.var.length + 1 + expr.f.length + 1 + 1; // +1s: two separating spaces + "["
+   var contPad  = _padStr(headLen, mode);              // aligns every OTHER value under the first one
+   var closePad = _padStr(Math.max(0, headLen - 1), mode); // "]" aligns with the opening "[" itself
+
+   var lines = [ indent+kw+pad+varTok+' '+funcTok+' '+_ppTok(mode, 'punc', '[')+valueLines[0] ];
+   for (var i = 1; i < valueLines.length; ++i)
+    lines.push(contPad+valueLines[i]);
+   lines.push(closePad+_ppTok(mode, 'punc', ']'));
+   return lines;
  }
 
 /** Renders an expression tree as syntax-colored HTML (monospace, indented, with each sibling
@@ -438,18 +527,22 @@ function _ppLeaf(expr, vars, functions, mode)
  *  @param {Array}  tree      – the expression tree (see module header for shape)
  *  @param {Array}  vars      – the same {name,label} vocabulary passed to the editor's config
  *  @param {Array}  functions – the same {name,label} vocabulary passed to the editor's config
+ *  @param {Object} [dict]    – optional { varName: { code: description|null } } lookup (see
+ *                              FloriaExpressionEditor config's "descriptionLookup"/_descrCache);
+ *                              when omitted, every leaf renders with the original flat/quoted
+ *                              values list.
  */
-export function formatExpressionAsHtml(tree, vars, functions)
+export function formatExpressionAsHtml(tree, vars, functions, dict)
  {
-   return _ppList(tree || [], 0, vars || [], functions || [], 'html').join('\n');
+   return _ppList(tree || [], 0, vars || [], functions || [], 'html', dict).join('\n');
  }
 
 /** Same as formatExpressionAsHtml, but returns plain text (no HTML markup, no title tooltips —
  *  those need real HTML) — suitable for logging/plain display, or as the text/plain fallback of a
  *  clipboard write (see formatExpressionAsRichHtml). */
-export function formatExpressionAsText(tree, vars, functions)
+export function formatExpressionAsText(tree, vars, functions, dict)
  {
-   return _ppList(tree || [], 0, vars || [], functions || [], 'plain').join('\n');
+   return _ppList(tree || [], 0, vars || [], functions || [], 'plain', dict).join('\n');
  }
 
 /** Same content/coloring as formatExpressionAsHtml, but self-contained: every token's color/style
@@ -461,9 +554,9 @@ export function formatExpressionAsText(tree, vars, functions)
  *  clipboard by the Preview tab's "Copy" button (see FloriaExpressionEditor._renderPreview) so
  *  pasting it somewhere that accepts rich text keeps the same look as shown on screen, while a
  *  plain-text-only target still gets a sensible fallback (formatExpressionAsText). */
-export function formatExpressionAsRichHtml(tree, vars, functions)
+export function formatExpressionAsRichHtml(tree, vars, functions, dict)
  {
-   return _ppList(tree || [], 0, vars || [], functions || [], 'rich').join('<br>');
+   return _ppList(tree || [], 0, vars || [], functions || [], 'rich', dict).join('<br>');
  }
 
 // Writes BOTH a text/html and a text/plain representation to the clipboard in one shot, via the
@@ -490,6 +583,26 @@ function _copyRichAndPlain(html, plain)
    navigator.clipboard?.writeText(plain);
  }
 
+// Briefly flashes a green checkmark right next to `btnEl` (e.g. a "Copy"/"Copy JSON" button) to
+// confirm the click actually did something — clipboard writes are otherwise silent/invisible.
+// Reuses a single checkmark element per button (re-triggering the CSS fade-out animation on
+// repeat clicks, via a reflow, rather than piling up stale elements) so mashing the button
+// doesn't leave duplicates behind or need any timer bookkeeping here.
+function _flashCopiedCheckmark(btnEl)
+ {
+   var mark = btnEl.nextElementSibling;
+   if (mark == null || mark.classList.contains('fee-copied-check') !== true)
+    {
+      mark = document.createElement('span');
+      mark.className = 'fee-copied-check';
+      mark.textContent = '\u2713';
+      btnEl.insertAdjacentElement('afterend', mark);
+    }
+   mark.classList.remove('fee-copied-check-show');
+   void mark.offsetWidth; // force reflow so re-adding the class restarts the animation
+   mark.classList.add('fee-copied-check-show');
+ }
+
 // ── The component ───────────────────────────────────────────────────────────────────────────────────
 
 export class FloriaExpressionEditor
@@ -509,6 +622,16 @@ export class FloriaExpressionEditor
       this._onChange    = typeof config.onChange === 'function' ? config.onChange : null;
       this._tree        = FloriaDOM.clone(config.initialTree || []);
       _normalizeList(this._tree);
+
+      // Optional application-layer code-description resolver — see module header config docs.
+      // _descrCache is a persistent { varName: { code: description|null } } dictionary, built up
+      // (and NEVER pruned — see config docs) across the whole lifetime of this instance as the
+      // Preview tab encounters new codes; entirely empty/unused when no descriptionLookup is
+      // configured, which is exactly what keeps every leaf on the original flat/quoted rendering.
+      this._descriptionLookup = typeof config.descriptionLookup === 'function' ? config.descriptionLookup : null;
+      this._descrCache        = {};
+      this._showTabJSON       = config.showTabJSON === true;
+      this._initialTab        = config.initialTab != null ? config.initialTab : 0;
 
       if (this._vars.length === 0)
        console.error("FloriaExpressionEditor('"+divId+"'): no 'vars' configured — the variable dropdown will be empty.");
@@ -530,12 +653,42 @@ export class FloriaExpressionEditor
       host.classList.add('fee-root');
 
        var that = this;
-       this._tabs = new FloriaTabs(this._id, [
+       var tabDefs = [
            { label: "Editor" , onSelectHandler: function(panelId) { that._renderBuilder(panelId); } }
           ,{ label: "Preview", onSelectHandler: function(panelId) { that._renderPreview(panelId); } }
-          ,{ label: "JSON"   , onSelectHandler: function(panelId) { that._renderJson(panelId); } }
-        ]);
-       this._tabs.show(0);
+         ];
+       if (this._showTabJSON === true)
+        tabDefs.push({ label: "JSON", onSelectHandler: function(panelId) { that._renderJson(panelId); } });
+       this._tabs = new FloriaTabs(this._id, tabDefs);
+       this._tabs.show(this._resolveInitialTabIndex(tabDefs));
+    }
+
+   // Resolves the constructor's "initialTab" config (see module header docs) — either a numeric
+   // tab index (used as-is, same convention as FloriaTabs.show()'s own defaultTabId) or a tab
+   // label string (case-insensitive, e.g. "Preview") — down to the numeric index FloriaTabs.show()
+   // actually wants. Falls back to 0 (the "Editor" tab, unchanged default behavior) for anything
+   // unrecognized (an out-of-range index, or a label that doesn't match any configured/visible
+   // tab — e.g. "JSON" when showTabJSON isn't enabled), logging a console.error so a caller's typo
+   // doesn't fail silently.
+   _resolveInitialTabIndex(tabDefs)
+    {
+      var initialTab = this._initialTab;
+      if (typeof initialTab === 'number')
+       {
+         if (initialTab >= 0 && initialTab < tabDefs.length)
+          return initialTab;
+         console.error("FloriaExpressionEditor('"+this._id+"'): initialTab index "+initialTab+" is out of range — defaulting to 0.");
+         return 0;
+       }
+      if (typeof initialTab === 'string')
+       {
+         var idx = tabDefs.findIndex(function(t) { return t.label.toLowerCase() === initialTab.toLowerCase(); });
+         if (idx !== -1)
+          return idx;
+         console.error("FloriaExpressionEditor('"+this._id+"'): initialTab '"+initialTab+"' does not match any tab — defaulting to 0.");
+         return 0;
+       }
+      return 0;
     }
 
    /** Returns a deep-clone of the current expression tree. */
@@ -610,16 +763,22 @@ export class FloriaExpressionEditor
 
    _deleteItem(itemPath)
     {
-      // The first item of ANY list — the top-level tree or a nested group's "sub" — is that
-      // list's base/anchor value (it carries no "op", see _normalizeList) and can never be
-      // deleted individually; to get rid of it, delete the whole group it belongs to instead
-      // (from ITS parent list), or add other conditions before deleting this one down to it.
-      // The delete button is already hidden for this exact case (see _renderItem/_renderList),
-      // this is just the defensive backstop against directly calling the mutator.
+      // Any item — including the first ("anchor") item of a list, which carries no "op" of its
+      // own (see _normalizeList) — can be deleted; if it wasn't the last remaining item in its
+      // list, _afterMutate()'s _normalizeList() call takes care of stripping "op" back off
+      // whichever item slides into index 0 next, same as ever.
+      //
+      // But deleting the LAST remaining item of a NESTED group's own "sub" list leaves that group
+      // with nothing in it at all — an empty group asserts no condition whatsoever, so rather
+      // than leave a dangling, confusing "no conditions in this group yet" shell sitting in the
+      // tree, cascade the delete up: remove the (now-empty) group itself from ITS OWN parent
+      // list, recursing so a chain of now-empty ancestor groups is cleaned up too. The top-level
+      // tree itself is exempt (there's no enclosing "group" to remove) — it's perfectly fine, and
+      // expected, for it to end up empty (see _renderList's/​_renderIntroBlurb's empty-state).
       var loc = _resolveItem(this._tree, itemPath);
-      if (loc.index === 0)
-       return;
       loc.list.splice(loc.index, 1);
+      if (loc.list.length === 0 && itemPath.length > 1)
+       return this._deleteItem(itemPath.slice(0, -1));
       this._afterMutate();
     }
 
@@ -724,6 +883,8 @@ export class FloriaExpressionEditor
       var str = '<div class="fee-toolbar">'
               +   '<span id="'+helpId+'" class="fee-help-icon">?</span>'
               + '</div>'
+              + (this._tree.length === 0 && this._readOnly !== true ? this._renderIntroBlurb() : '')
+              + this._renderAddButtons([])
               + this._renderList(this._tree, [])
               + '<BR><BR><BR>'
               ;
@@ -732,12 +893,7 @@ export class FloriaExpressionEditor
 
       this._mountPendingPickers();
 
-      new FloriaTooltipDialog(helpId,
-          '<div class="fee-help-body">'
-        + '<b>AND</b>/<b>OR</b> combine each condition with everything above it, in order.<br>'
-        + 'Use <b>+ Group</b> to nest conditions and control precedence explicitly.<br>'
-        + 'The <b>Matching</b>/<b>Not matching</b> switch negates a single condition or a whole group.'
-        + '</div>');
+      new FloriaTooltipDialog(helpId, '<div class="fee-help-body">'+this._introBlurbContent()+'</div>');
 
       if (this._builderBound === true)
        return;
@@ -745,18 +901,61 @@ export class FloriaExpressionEditor
       this._bindBuilderEvents(panel);
     }
 
+   // Explanatory blurb shown only above an EMPTY root tree (never for a nested empty group,
+   // which already has its own "No conditions in this group yet." message right below its own
+   // always-visible add-buttons — see _renderList/_renderAddButtons) — a first-time user facing
+   // a totally blank editor otherwise has no clue what the two buttons below even do. Also reused
+   // (see _introBlurbContent) verbatim as the "?" help-icon's tooltip content (_renderBuilder), so
+   // that always-available help never drifts out of sync with this empty-state explanation.
+   _renderIntroBlurb()
+    {
+      return '<div class="fee-intro-blurb">'+this._introBlurbContent()+'</div>';
+    }
+
+   // The actual explanatory copy (no outer wrapper div) shared by both _renderIntroBlurb (wrapped
+   // in .fee-intro-blurb, shown above an empty root tree) and the "?" help-icon's FloriaTooltipDialog
+   // (wrapped in .fee-help-body, always available regardless of whether the tree is empty) — see
+   // _renderBuilder.
+   _introBlurbContent()
+    {
+      return '<p>This expression is currently empty. Use the buttons below to get started:</p>'
+           +   '<ul>'
+           +     '<li>Click <b>+ Condition</b> to test a variable against one or more values.</li>'
+           +     '<li>Click <b>+ Group</b> to nest conditions and control how they combine.</li>'
+           +     '<li>Add a second item to reveal the <b>AND</b>/<b>OR</b> switch that joins it to the one above.</li>'
+           +     '<li>Use <b>Matching</b>/<b>Not matching</b> to negate any single condition or a whole group.</li>'
+           +     '<li>Check the <b>Preview</b> tab any time for a readable view of what you have built.</li>'
+           +   '</ul>';
+    }
+
+   // Renders the "+ Condition"/"+ Group" add-buttons for one container (the root tree when
+   // path=[], or a nested group's "sub" otherwise). ALWAYS rendered by the caller — see
+   // _renderBuilder() for the root and _renderItem()'s groupActions for a nested group — so they
+   // stay visible regardless of whether that container is currently empty or already has items
+   // (this used to be rendered by _renderList() itself, but ONLY in the empty-list branch, which
+   // is exactly why the buttons vanished for good as soon as the first item was added).
+   _renderAddButtons(containerPath)
+    {
+      if (this._readOnly === true)
+       return '';
+      var pathAttr = _esc(JSON.stringify(containerPath));
+      return '<div class="fee-add-buttons">'
+           +   '<button type="button" class="fee-btn" data-action="add-cond" data-container-path=\''+pathAttr+'\' title="Add a new condition, ANDed or ORed">+ Condition</button>'
+           +   '<button type="button" class="fee-btn" data-action="add-group" data-container-path=\''+pathAttr+'\' title="Add a new subgroup of conditions (i.e., a sub-expression with parentheses)">+ Group</button>'
+           + '</div>';
+    }
+
    _renderList(list, path)
     {
+      // NOTE: the "+ Condition"/"+ Group" add-buttons for THIS container are always rendered by
+      // the caller — see _renderAddButtons(), called from _renderBuilder() for the root list and
+      // from _renderItem()'s groupActions for a nested group's "sub" — regardless of whether the
+      // list is currently empty or not, so they never disappear once the first item is added
+      // (previously they were ONLY rendered here, in the empty branch, so they vanished for good
+      // as soon as a list went from 0 to 1 item). This method now only ever renders the LIST
+      // ITSELF (or an empty-state message when there's nothing in it yet).
       if (!Array.isArray(list) || list.length === 0)
-       {
-         if (this._readOnly === true)
-          return '<div class="fee-empty-msg">No conditions.</div>';
-         var containerPath = _esc(JSON.stringify(path));
-         return '<div class="fee-empty-list">'
-              +   '<button class="fee-btn" data-action="add-cond" data-container-path=\''+containerPath+'\'>+ Condition</button>'
-              +   '<button class="fee-btn" data-action="add-group" data-container-path=\''+containerPath+'\'>+ Group</button>'
-              + '</div>';
-       }
+       return '<div class="fee-empty-msg">'+(this._readOnly===true?'No conditions.':(path.length===0?'No conditions defined yet.':'No conditions in this group yet.'))+'</div>';
       var html = '<div class="fee-list">';
       for (var i = 0; i < list.length; ++i)
        html += this._renderItem(list[i], path.concat([i]), i === 0);
@@ -795,7 +994,7 @@ export class FloriaExpressionEditor
                +   '<span class="fee-not-toggle-label">'+notLabel+'</span>'
                + '</span>';
       else
-       notHtml = '<label class="fee-not-toggle-wrap'+(notOn?' fee-not-on':'')+'" data-item-path=\''+pathStr+'\'>'
+       notHtml = '<label class="fee-not-toggle-wrap'+(notOn?' fee-not-on':'')+'" data-item-path=\''+pathStr+'\' title="Toggle between inclusion and exclusion (i.e., NOT)">'
                +   '<span class="fee-switch">'
                +     '<input type="checkbox" class="fee-not-switch"'+(notOn?' checked':'')+'>'
                +     '<span class="fee-switch-slider"></span>'
@@ -803,29 +1002,22 @@ export class FloriaExpressionEditor
                +   '<span class="fee-not-toggle-label">'+notLabel+'</span>'
                + '</label>';
 
-      // Delete is hidden entirely (rather than shown-but-non-functional) for the first item of
-      // ANY list — the top-level tree or a nested group's "sub" — since that item is the list's
-      // base/anchor value (it carries no "op", see _normalizeList) and can never be deleted
-      // individually (see _deleteItem). To remove it, delete the whole group it belongs to
-      // instead, or delete the OTHER items in this same list down to it. Move up/down stay
-      // visible regardless (they're already safe no-ops out of bounds).
-      var canDelete = isFirst !== true;
+      // Delete is available on every item, including the first ("anchor") item of a list — see
+      // _deleteItem for how deleting it (or the last remaining item of a nested group) is handled
+      // structurally. Move up/down stay visible regardless (they're already safe no-ops out of
+      // bounds).
       var actionsHtml = '';
       if (readOnly === false)
        actionsHtml = '<span class="fee-row-actions">'
                     +   '<button type="button" class="fee-move-btn" data-action="move-up"   data-item-path=\''+pathStr+'\' title="Move up">&#9650;</button>'
                     +   '<button type="button" class="fee-move-btn" data-action="move-down" data-item-path=\''+pathStr+'\' title="Move down">&#9660;</button>'
-                    +   (canDelete === true ? '<button type="button" class="fee-btn fee-btn-danger" data-action="delete" data-item-path=\''+pathStr+'\' title="Delete">&#128465;</button>' : '')
+                    +   '<button type="button" class="fee-btn fee-btn-danger" data-action="delete" data-item-path=\''+pathStr+'\' title="Delete">&#128465;</button>'
                     + '</span>';
 
       var bodyHtml;
       if (item.sub != null)
        {
-         var groupActions = readOnly === true ? '' :
-             '<div class="fee-group-actions">'
-           +   '<button type="button" class="fee-btn" data-action="add-cond"  data-container-path=\''+pathStr+'\'>+ Condition</button>'
-           +   '<button type="button" class="fee-btn" data-action="add-group" data-container-path=\''+pathStr+'\'>+ Group</button>'
-           + '</div>';
+         var groupActions = this._renderAddButtons(path);
          bodyHtml = '<div class="fee-group">'+groupActions+this._renderList(item.sub, path)+'</div>';
        }
       else
@@ -956,9 +1148,16 @@ export class FloriaExpressionEditor
           if ((btn = e.target.closest('[data-action="delete"]')) != null)
            {
              var delPath = JSON.parse(btn.dataset.itemPath);
-             var delItem = _resolveItem(that._tree, delPath).item;
-             var kind = delItem.sub != null ? 'group' : 'condition';
-             new FloriaAlertSimple('Delete this '+kind+'?', 'This cannot be undone.', 'Delete', 'Cancel', function() {
+             var delLoc  = _resolveItem(that._tree, delPath);
+             var kind = delLoc.item.sub != null ? 'group' : 'condition';
+             // Deleting the only remaining item of a NESTED group's own "sub" list cascades into
+             // deleting that group itself (see _deleteItem) — flag this up front rather than
+             // leaving the user surprised by an entire group disappearing.
+             var cascades = delLoc.list.length === 1 && delPath.length > 1;
+             var msg = cascades === true
+                 ? 'This is the only remaining item in its group — deleting it will also delete the enclosing group. This cannot be undone.'
+                 : 'This cannot be undone.';
+             new FloriaAlertSimple('Delete this '+kind+'?', msg, 'Delete', 'Cancel', function() {
                  that._deleteItem(delPath);
                }).show();
              return;
@@ -1037,7 +1236,95 @@ export class FloriaExpressionEditor
 
    // ── Preview rendering (human-readable, syntax-colored — no JSON) ───────
 
+   // Walks the current tree and returns the entries[] shape described in the module header's
+   // "descriptionLookup" config docs, containing ONLY var/code pairs not already present in
+   // this._descrCache — i.e. exactly the bulk lookup request that needs to go out, deduplicated
+   // both within a single var (a code repeated across several leaves is only listed once) and
+   // against everything already cached from a previous Preview visit.
+   _collectPendingDescrLookups()
+    {
+      var cache = this._descrCache;
+      var pendingByVar = {}; // varName -> Set of codes needing lookup
+
+      (function walk(list)
+        {
+          if (!Array.isArray(list))
+           return;
+          for (var i = 0; i < list.length; ++i)
+           {
+             var item = list[i];
+             if (item.expr != null)
+              {
+                var v = item.expr.var;
+                var vals = Array.isArray(item.expr.vals) ? item.expr.vals : [];
+                var already = cache[v];
+                for (var j = 0; j < vals.length; ++j)
+                 {
+                   var code = vals[j];
+                   if (already == null || Object.prototype.hasOwnProperty.call(already, code) === false)
+                    {
+                      if (pendingByVar[v] == null) pendingByVar[v] = new Set();
+                      pendingByVar[v].add(code);
+                    }
+                 }
+              }
+             else if (item.sub != null)
+              walk(item.sub);
+           }
+        })(this._tree);
+
+      var pending = [];
+      Object.keys(pendingByVar).forEach(function(v) {
+          pending.push({ var: v, values: Array.from(pendingByVar[v]).map(function(val) { return { val: val, descr: null }; }) });
+        });
+      return pending;
+    }
+
+   // Merges a resolved (post-descriptionLookup) entries[] back into the persistent _descrCache —
+   // called with the SAME array object passed to the handler, which is expected to have mutated
+   // each value's "descr" in place. Every requested code is cached regardless of outcome
+   // (including a code the handler couldn't describe, cached as null) so it is never re-requested
+   // — see the module header config docs' caching contract.
+   _mergeResolvedDescriptions(entries)
+    {
+      var cache = this._descrCache;
+      (entries || []).forEach(function(entry) {
+          var bucket = cache[entry.var] || (cache[entry.var] = {});
+          (entry.values || []).forEach(function(v) {
+              bucket[v.val] = v.descr != null ? v.descr : null;
+            });
+        });
+    }
+
    _renderPreview(panelId)
+    {
+      var panel = document.getElementById(panelId);
+      if (panel == null)
+       return;
+
+      var that = this;
+
+      // Only await/lookup when there's an actual resolver AND at least one new/uncached code —
+      // avoids both a pointless server round-trip and a distracting "Loading…" flash on every
+      // single visit to this tab once everything is already cached.
+      var pending = this._descriptionLookup != null ? this._collectPendingDescrLookups() : [];
+      if (pending.length === 0)
+       return this._paintPreview(panelId);
+
+      panel.innerHTML = '<div class="fee-empty-msg">Loading code descriptions…</div>';
+      Promise.resolve()
+        .then(function() { return that._descriptionLookup(pending); })
+        .catch(function(e) { console.error("FloriaExpressionEditor: descriptionLookup handler threw", e); })
+        .then(function() {
+            that._mergeResolvedDescriptions(pending);
+            // The user may have switched away from Preview (or torn down the component) while
+            // the lookup was in flight — only paint if this exact panel is still in the DOM.
+            if (document.getElementById(panelId) != null)
+             that._paintPreview(panelId);
+          });
+    }
+
+   _paintPreview(panelId)
     {
       var panel = document.getElementById(panelId);
       if (panel == null)
@@ -1048,18 +1335,19 @@ export class FloriaExpressionEditor
               +   '<button type="button" class="fee-btn" id="'+panelId+'_COPY_TEXT" title="Copies a rich-text version (same colors/alignment as shown here) for pasting into email/docs/etc., plus a plain-text fallback for anything that only accepts plain text">Copy</button>'
               + '</div>';
 
-      str += this._renderLogicWarnings(analysis, panelId);
+//      str += this._renderLogicWarnings(analysis, panelId);
 
       str += '<div class="fee-section-label">Expression</div>';
       str += this._tree.length === 0
            ? '<div class="fee-empty-msg">No conditions defined.</div>'
-           : '<div class="fee-pretty">'+formatExpressionAsHtml(this._tree, this._vars, this._funcs)+'</div>';
+           : '<div class="fee-pretty">'+formatExpressionAsHtml(this._tree, this._vars, this._funcs, this._descrCache)+'</div>';
 
       panel.innerHTML = str;
 
-      var textStr = formatExpressionAsText(this._tree, this._vars, this._funcs);
-      var richStr = formatExpressionAsRichHtml(this._tree, this._vars, this._funcs);
-      document.getElementById(panelId+'_COPY_TEXT').addEventListener('click', function() { _copyRichAndPlain(richStr, textStr); });
+      var textStr = formatExpressionAsText(this._tree, this._vars, this._funcs, this._descrCache);
+      var richStr = formatExpressionAsRichHtml(this._tree, this._vars, this._funcs, this._descrCache);
+      var copyBtn = document.getElementById(panelId+'_COPY_TEXT');
+      copyBtn.addEventListener('click', function() { _copyRichAndPlain(richStr, textStr); _flashCopiedCheckmark(copyBtn); });
     }
 
    // ── JSON rendering (raw tree, for developers/integrators) ──────────────
@@ -1071,7 +1359,7 @@ export class FloriaExpressionEditor
        return;
 
       var str = '<div class="fee-preview-toolbar">'
-              +   '<button type="button" class="fee-btn" id="'+panelId+'_COPY_JSON">Copy JSON</button>'
+              +   '<button type="button" class="fee-btn" id="'+panelId+'_COPY_JSON">Copy</button>'
               + '</div>';
       var jsonStr = _compactJson(JSON.stringify(this._tree, null, 2));
       str += '<div class="fee-section-label">Raw JSON</div>';
@@ -1079,9 +1367,9 @@ export class FloriaExpressionEditor
 
       panel.innerHTML = str;
 
-      document.getElementById(panelId+'_COPY_JSON').addEventListener('click', function() { navigator.clipboard?.writeText(jsonStr); });
+      var copyJsonBtn = document.getElementById(panelId+'_COPY_JSON');
+      copyJsonBtn.addEventListener('click', function() { navigator.clipboard?.writeText(jsonStr); _flashCopiedCheckmark(copyJsonBtn); });
     }
-
    _renderLogicWarnings(analysis, panelId)
     {
       var str = '';
