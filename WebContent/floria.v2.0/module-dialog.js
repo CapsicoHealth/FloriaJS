@@ -19,6 +19,7 @@
 import { FloriaDOM   } from "./module-dom.js";
 import { createPopper } from "/static/jslibs/popperjs/popper.js";
 
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-dialog.css", import.meta.url).href);
 
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Floria Dialog
@@ -26,6 +27,11 @@ import { createPopper } from "/static/jslibs/popperjs/popper.js";
 
 var __DIALOGS = [];
 var __hiding = false; // global flag to manage overlapping dialog functionality, e.g., hiding one while showing another
+
+// Cache of fetched FloriaTabs help fragments, keyed by helpUrl, shared across every FloriaTabs
+// instance on the page — a given help URL's HTML is only ever fetched once per page load, no
+// matter how many different FloriaTabs (or repeated opens of the same one) reference it.
+var __TABS_HELP_CACHE = {};
 
 function printDialogStack()
  {
@@ -58,7 +64,13 @@ export function FloriaDialog(elementId)
    this._closeable = true;
 
    var that = this;
-   FloriaDOM.addEvent(elementId+"_MD_CLOSE", "click", function() {
+   FloriaDOM.addEvent(elementId+"_MD_CLOSE", "click", async function() {
+     if (that._onBeforeHideHandler != null)
+      {
+        var proceed = await that._onBeforeHideHandler(true);
+        if (proceed === false)
+         return;
+      }
      that.hide(true);
    }, null, true);
    
@@ -70,6 +82,15 @@ export function FloriaDialog(elementId)
    this.setOnHide = function(func)
     {
       this._onHideHandler = func;
+    };
+   // Optional, cancelable hook invoked ONLY when the user closes the dialog via its own "X" close
+   // button (i.e. manualClose === true from that path). `func` may be async and should return false
+   // to abort the close (e.g. to surface an "unsaved changes" confirmation), or anything else/undefined
+   // to allow it. NOT invoked for programmatic hide()/close() calls made directly by app code — those
+   // callers are expected to perform their own confirmation before calling hide(), same as before.
+   this.setOnBeforeHide = function(func)
+    {
+      this._onBeforeHideHandler = func;
     };
    this.setOnLoad = function(func)
     {
@@ -492,24 +513,120 @@ export function FloriaContextMenu(elementId, options, cssPostfix, callbackFunc, 
 /**
  tabs ia an array:
     { label:"", descr:"", hide:true|false, onHideHanler: function, onSelectHandler: function }
+
+    onSelectHandler(panelId, isFirstRender, setStatus) is called every time this tab is selected
+    (see select() below):
+      panelId       - id of this tab's panel DIV, to render/refresh content into.
+      isFirstRender - true only the very first time this tab is ever selected (handlers typically
+                      use this to lazily build their panel's DOM once, rather than on every select).
+      setStatus     - a function(status) already bound to THIS tab — status is one of "busy",
+                      "success", "failure", or null/undefined to clear. Equivalent to calling
+                      floriaTabsInstance.setTabStatus(thisTabsIndexOrLabel, status) yourself, minus
+                      having to hold onto the FloriaTabs instance or hard-code this tab's own
+                      index/label just to reference itself — see setTabStatus()'s docs further
+                      below for what the status actually looks like. Typical usage from inside a
+                      tab's own long-running action (e.g. a "Run" button click handler kicked off
+                      from onSelectHandler, or later, from any code that still has a reference to
+                      this same setStatus closure):
+                        setStatus('busy');
+                        try { await doTheWork(); setStatus('success'); }
+                        catch (e) { setStatus('failure'); }
+
+ skin (optional): visual skin for the tab header — see module-dialog.css.
+    null|"classic" (default) - original look & feel, fully backward compatible.
+    "modern"                 - Material-ish flat header with a sliding underline
+                                indicator (".tabContainer--modern" in module-dialog.css).
+    The skin only ever ADDS a modifier class alongside ".tabContainer" — the shared
+    structural/layout rules (position, sizing, .tabBody scrolling, ...) are never
+    duplicated or overridden, only the header's visual appearance changes.
+
+ helpUrl (optional): when provided, a small "(?)" help icon is rendered to the right of the tab
+    headers (see ".tabHelpIcon" in module-dialog.css). Clicking it fetches helpUrl (once — the
+    result is cached in __TABS_HELP_CACHE, shared across every FloriaTabs instance on the page)
+    and displays it as a rich popover (a FloriaTooltipDialog, per this app's convention of using
+    that component for any anchored, dismissable HTML popup) anchored to the icon itself, with
+    its own close ("×") affordance and click-outside-to-dismiss behavior. Purely additive: a
+    FloriaTabs with no helpUrl renders and behaves exactly as before.
  */
-export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan)
+export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, skin, helpUrl)
  {
    this._elementId = elementId;
    this._tabs = tabs;
    this._currentTabId = null;
    this._singleDiv = singleDiv || false;
-   
+   this._skinClass = (skin != null && skin != "classic") ? " tabContainer--"+skin : "";
+   this._helpUrl = helpUrl || null;
+   this._helpDialog = null;
+
+   // Lazily creates (on first use) and (re)opens the help popover anchored to the "(?)" icon,
+   // fetching/rendering helpUrl's HTML (from cache if already fetched once this page load).
+   this._showHelp = function()
+    {
+      var that = this;
+      if (that._helpDialog == null)
+       {
+         that._helpDialog = new FloriaTooltipDialog(elementId+"_TABHELP", "", true, true, "tabHelpTooltip");
+         that._helpDialog.setSize("min(560px, 92vw)", "min(70vh, 620px)");
+         // Click-outside-to-close: only acts while THIS dialog's tooltip is actually shown, and
+         // ignores clicks on the tooltip itself or on the icon that opened it (which has its own
+         // toggle-safe handler further down in show()).
+         document.addEventListener("click", function(ev)
+          {
+            var tt = that._helpDialog?.getTooltipDiv();
+            if (tt == null || tt.hasAttribute("show-popper") == false)
+             return;
+            var icon = document.getElementById(elementId+"_TABHELP");
+            if (tt.contains(ev.target) || icon === ev.target || (icon != null && icon.contains(ev.target)))
+             return;
+            that._helpDialog.hide();
+          }, true);
+       }
+
+      var render = function(html)
+       {
+         that._helpDialog.setContents(
+             '<div class="tabHelpPopover">'
+           +   '<span class="tabHelpClose" title="Close">&times;</span>'
+           +   '<div class="tabHelpBody">'+html+'</div>'
+           + '</div>');
+         var closeEl = that._helpDialog.getTooltipDiv().querySelector(".tabHelpClose");
+         if (closeEl != null)
+          closeEl.onclick = function(e) { e.preventDefault(); e.stopPropagation(); that._helpDialog.hide(); };
+       };
+
+      render(__TABS_HELP_CACHE[that._helpUrl] || '<div class="tabHelpLoading">Loading…</div>');
+      that._helpDialog.show(null, false);
+
+      if (__TABS_HELP_CACHE[that._helpUrl] != null)
+       return;
+      fetch(that._helpUrl)
+        .then(function(resp) { return resp.text(); })
+        .then(function(html)
+         {
+           __TABS_HELP_CACHE[that._helpUrl] = html;
+           render(html);
+         })
+        .catch(function()
+         {
+           render('<p>Sorry, this help content could not be loaded.</p>');
+         });
+    };
+
    this.show = function(defaultTabId = 0)
     {
-      var str = '<DIV class="tabContainer"><DIV id="'+elementId+'_TABHEADERS" class="tabHeader">';
+      var str = '<DIV class="tabContainer'+this._skinClass+'"><DIV id="'+elementId+'_TABHEADERS" class="tabHeader">';
       for (var i = 0; i < this._tabs.length; ++i)
        {
          var t = this._tabs[i];
          if (t.hide == true)
           continue;
-         str+='<SPAN id="'+elementId+'_TABHEADER_'+i+'" data-tabid="'+i+'" data-contextTarget="1" title="'+(t.descr==null?"":t.descr.printHtmlAttrValue())+'">'+t.label+'</SPAN>';
+         str+='<SPAN id="'+elementId+'_TABHEADER_'+i+'" data-tabid="'+i+'" data-contextTarget="1"'
+             +(t._status!=null?' data-tabstatus="'+t._status+'"':'')
+             +' title="'+(t.descr==null?"":t.descr.printHtmlAttrValue())+'">'+t.label+'</SPAN>';
+
        }
+      if (this._helpUrl != null)
+       str += '<SPAN id="'+elementId+'_TABHELP" class="tabHelpIcon" title="Quick Guide / Help"></SPAN>';
       str+='</DIV><DIV class="tabBody">';
       var current = 0;
       for (var i = 0; i < this._tabs.length; ++i)
@@ -529,8 +646,17 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan)
 
       FloriaDOM.addEvent(elementId+"_TABHEADERS", "click", function(e, event, target) {
         var tabId = target.dataset.tabid;
+        if (tabId == null)
+         return; // click landed on the header strip itself (or the help icon — handled separately below), not a tab
         that.select(tabId);
       }, null, true);
+
+      if (this._helpUrl != null)
+       FloriaDOM.addEvent(elementId+"_TABHELP", "click", function(e, event, target) {
+         event.preventDefault();
+         event.stopPropagation();
+         that._showHelp();
+       }, null, true);
 
       if (managingFunc != null)
        {
@@ -552,35 +678,122 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan)
        }
     }
     
+   // Resolves a tab reference to an index, or null if not found. Accepts a numeric index (either a
+   // real number, or the numeric STRING that the header click handler passes through from
+   // target.dataset.tabid — see show()'s click handler above), or the tab's .label string.
+   this._resolveTabIndex = function(tabIdOrLabel)
+    {
+      if (typeof tabIdOrLabel === "number")
+       return tabIdOrLabel;
+      if (typeof tabIdOrLabel === "string" && tabIdOrLabel.trim() !== "" && !isNaN(tabIdOrLabel))
+       return Number(tabIdOrLabel);
+      var idx = this._tabs.findIndex(function(t) { return t.label === tabIdOrLabel; });
+      return idx >= 0 ? idx : null;
+    }
+
+   /**
+    * Sets (or clears) a "long running process" status badge on a background tab's header — mirrors
+    * how browser tabs show a spinner for a loading background tab, then a dot/icon once it's done,
+    * until the user actually clicks over to that tab. See module-dialog.css's "Tab Status Badges"
+    * section for the actual visuals (busy = looping spinner ring; success/failure = a short pop-in
+    * animation settling on a static check/✕ dot).
+    *
+    *   tabIdOrLabel - the tab's numeric index (as passed to select()), OR its .label string —
+    *                  whichever is more convenient for the caller (e.g. app code that only knows
+    *                  a tab by name, not its position in the array).
+    *   status       - one of "busy", "success", "failure", or null/undefined to clear the badge
+    *                  outright (e.g. if the app wants to cancel/reset it itself, without waiting
+    *                  for the user to select the tab).
+    *
+    * The badge is automatically cleared the moment the user selects that tab (see select() below) —
+    * callers never need to clear "success"/"failure" themselves in the common case. BUT if the tab
+    * reporting "success"/"failure" is ALREADY the one currently in focus (e.g. the user kicked off
+    * the action and stayed put, rather than switching away and back), select()'s clear-on-select
+    * would never fire — so that specific case is instead auto-dismissed here after a short 1s
+    * delay, just long enough for the pop/shake flourish to register before it disappears.
+    */
+   this.setTabStatus = function(tabIdOrLabel, status)
+    {
+      var idx = this._resolveTabIndex(tabIdOrLabel);
+      if (idx == null)
+       return;
+      var self = this;
+      var t = this._tabs[idx];
+      t._status = status || null;
+      // Bumped on every call and captured below so a LATER call (e.g. the user re-triggers the
+      // same action, or switches away/back re-clearing it via select()) can invalidate this one's
+      // pending auto-dismiss timeout instead of it firing late and clobbering a newer status.
+      var myGen = (t._statusGen = (t._statusGen || 0) + 1);
+      var headerEl = document.getElementById(elementId+'_TABHEADER_'+idx);
+      if (headerEl == null)
+       return; // tab isn't currently rendered (e.g. t.hide==true) — _status is still recorded above
+                // and will be painted next time show() rebuilds the header for this tab.
+      if (t._status == null)
+       headerEl.removeAttribute('data-tabstatus');
+      else
+       headerEl.setAttribute('data-tabstatus', t._status);
+
+      if ((status === "success" || status === "failure") && idx == this._currentTabId)
+       setTimeout(function() {
+         if (t._statusGen === myGen) // nothing else touched this tab's status in the meantime
+          self.setTabStatus(idx, null);
+       }, 2500);
+    }
+
    this.select = function(i)
     {
-      if (this._currentTabId != null)
-       {
-         FloriaDOM.removeCSS(elementId+'_TABHEADER_'+this._currentTabId, "selected");
-         FloriaDOM.removeCSS(elementId+'_TABPANEL_'+this._currentTabId, "selected");
-         var t = this._tabs[this._currentTabId];
-         t.current = false;
-         if (t.onHideHanler != null)
-          t.onHideHanler(elementId+'_TABPANEL_'+this._currentTabId);
-       }
-      FloriaDOM.addCSS(elementId+'_TABHEADER_'+i, "selected");
-      FloriaDOM.addCSS(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i), "selected");
+      var self = this; // captured so the setStatus closure passed to onSelectHandler below (a plain
+                        // function, not an arrow function) can still reach this FloriaTabs instance
+                        // after `this` itself is no longer in scope for it.
       var t = this._tabs[i];
-       if (t._renderCount == null)
-           t._renderCount = 0;
-    
-      ++t._renderCount;
-      if (t._renderCount == 1)
-       document.getElementById(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i)).scrollTop = 0;
+      if (t._renderCount == null)
+       t._renderCount = 0;
+      var isFirstRender = t._renderCount == 0;
+
+      // Give the target tab a chance to veto the switch (e.g. "you must save this record before doing
+      // X") BEFORE touching any visuals — returning exactly `false` from onSelectHandler aborts right
+      // here, leaving the previously active tab's CSS/onHideHanler untouched, as if nothing happened.
+      // Any other return value (including undefined, the common case for handlers that only render)
+      // is treated as "proceed", so this is fully backward-compatible with existing callers.
       if (t.onSelectHandler != null)
        {
+         var proceed = true;
          try {
-           t.onSelectHandler(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i), t._renderCount==1);
+           // Third argument: a setStatus(status) closure pre-bound to THIS tab (via its stable index
+           // `i`, not `this._currentTabId` — which is about to be reassigned to `i` a few lines down
+           // anyway, but capturing `i` directly here is what makes this correct/safe to stash away
+           // and call much later, e.g. from inside an async "Run" action kicked off from this very
+           // call). See this function's docs above for the full contract/example.
+           proceed = t.onSelectHandler(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i), isFirstRender,
+             function(status) { self.setTabStatus(i, status); });
          } catch (e)
          {
            console.error("Exception displaying tab '"+t.label+"': ", e);
          }
+         if (proceed === false)
+          return;
        }
+
+      // Selecting a tab acknowledges any pending status badge on it — mirrors a browser tab's
+      // spinner/notification dot clearing the moment you actually switch to that tab.
+      if (t._status != null)
+       this.setTabStatus(i, null);
+
+      if (this._currentTabId != null)
+       {
+         FloriaDOM.removeCSS(elementId+'_TABHEADER_'+this._currentTabId, "selected");
+         FloriaDOM.removeCSS(elementId+'_TABPANEL_'+this._currentTabId, "selected");
+         var prevT = this._tabs[this._currentTabId];
+         prevT.current = false;
+         if (prevT.onHideHanler != null)
+          prevT.onHideHanler(elementId+'_TABPANEL_'+this._currentTabId);
+       }
+      FloriaDOM.addCSS(elementId+'_TABHEADER_'+i, "selected");
+      FloriaDOM.addCSS(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i), "selected");
+
+      ++t._renderCount;
+      if (t._renderCount == 1)
+       document.getElementById(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i)).scrollTop = 0;
       t.current = true;
       this._currentTabId = i;
     }

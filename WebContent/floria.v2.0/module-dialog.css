@@ -1,0 +1,783 @@
+/* ===========================================================================
+ * Copyright (C) 2026 CapsicoHealth Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ============================================================
+   module-dialog.css
+   Styles for the components implemented in module-dialog.js:
+     FloriaDialog, FloriaTooltipDialog, FloriaContextMenu, FloriaTabs,
+     FloriaPromptDialog (inlined, no CSS here), FloriaAlert, FloriaAlertSimple.
+
+   This file was split out of the host app's capsico.css so that
+   module-dialog.js is a self-contained, drop-in-anywhere OSS component:
+   it now injects this stylesheet itself via FloriaDOM.injectCSSLink(),
+   the same pattern used by module-expression-editor.js.
+
+   All rules below are IDENTICAL, byte-for-byte in intent, to what used
+   to live in capsico.css EXCEPT where noted — this is a pure relocation,
+   not a redesign, for every selector except the new ".tabContainer--modern"
+   block at the bottom. Any app-specific overrides that targeted a
+   particular dialog's ID (e.g. #DLG_POPUPLOGIN .modalTitle) intentionally
+   stayed behind in capsico.css: those are page/app customizations layered
+   on top of this base component style, not part of the reusable component.
+
+   Wherever a rule reads a CSS custom property that's normally defined by
+   the *host app* (capsico.css's :root block, e.g. --modalTitleGradient,
+   --selected-color, --header-secondary), a fallback value is supplied so
+   this file also renders sensibly with no host app present at all.
+   ============================================================ */
+
+
+/*********************************************************
+  Modal Dialog  (FloriaDialog)
+**********************************************************/
+.modalBackground {
+    position: fixed;
+    left: -110%;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(4px);
+    background-color: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(.55,.06,.68,.19);
+    z-index: 2500;
+}
+.modalDialog {
+   position: absolute;
+   background-color: white;
+   border-radius: 24px 24px 18px 18px;
+   opacity: 0;
+   transition: top 0.4s cubic-bezier(.55,.06,.68,.19)
+             , opacity 0.5s cubic-bezier(.55,.06,.68,.19)
+             , transform 0.25s ease;
+}
+.modalTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--modalTitleGradient, linear-gradient(#f9fbfd, var(--baseline-color-shade, #acb)));
+  color: #203040;
+  font-weight: 600;
+  font-size: 1.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  border-radius: 8px 8px 0px 0px;
+}
+
+.modalTitle > span:nth-child(1) {
+  max-width: 92%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.modalTitle > span:nth-child(1) IMG {
+  height:2rem;
+  vertical-align:bottom;
+  margin-right:10px;
+  cursor:pointer;
+}
+
+.modalTitle > span:nth-child(2),
+.modalTitle .modalClose {
+  width: 28px;
+  height: 28px;
+  background: url('/static/img/cross_icon.png') center/18px no-repeat;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+.modalTitle > span:nth-child(2):hover,
+.modalTitle .modalClose:hover {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
+.modalContent {
+    position: absolute;
+    top: 3em;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    background-color: #FFFFFF;
+    padding: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    transform: translateZ(0px);
+    border-radius: 0px 0px 18px 18px;
+}
+
+@media only screen and (max-width: 1600px) {
+  .modalTitle {
+    padding-top: 6px;
+    font-size: 1.5rem;
+  }
+  .modalTitle > span:nth-child(1) IMG {
+    height:1.7rem;
+  }
+  .modalTitle > span:nth-child(2) {
+     width: 20px;
+     height: 20px;
+     margin-top: 4px;
+  }
+}
+@media only screen and (max-width: 1200px) {
+  .modalTitle {
+    padding-top: 0px;
+    font-size: 1.25rem;
+  }
+  .modalTitle > span:nth-child(1) IMG {
+    height:1.4rem;
+  }
+  .modalTitle > span:nth-child(2) {
+     width: 20px;
+     height: 20px;
+     margin-top: 4px;
+  }
+}
+@media only screen and (max-width: 800px) {
+  .modalTitle {
+    padding-top: 4px;
+    padding-bottom: 6px;
+    font-size: 1rem;
+  }
+  .modalTitle > span:nth-child(1) IMG {
+    height:0.9rem;
+  }
+  .modalTitle > span:nth-child(2) {
+      background-size: 10px;
+      width: 12px;
+      height: 12px;
+      top: 4px;
+      right: 4px;
+  }
+}
+
+
+/*********************************************************
+  Tooltip Dialog (FloriaTooltipDialog / Popper)
+**********************************************************/
+.popperTooltip {
+  position: absolute;
+  left: -1000px;
+  z-index: -9999;
+  transition: opacity 500ms ease-out;
+}
+.popperTooltip[show-popper] {
+  z-index: 99999;
+}
+.popperTooltip[show-popper] .popperContent {
+}
+.popperTooltip[show-popper]:hover {
+  z-index: 99999;
+}
+.popperTooltip[show-popper]:hover .popperContent {
+  z-index: 99999;
+}
+.popperTooltip > .popperArrow, .popperTooltip > .popperArrow::before {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: inherit;
+}
+.popperTooltip > .popperArrow {
+  visibility: hidden;
+}
+.popperTooltip > .popperArrow::before {
+  visibility: visible;
+  content: '';
+  transform: rotate(45deg);
+}
+.popperTooltip[data-popper-placement^='top'] > .popperArrow {
+  bottom: -8px;
+}
+.popperTooltip[data-popper-placement^='bottom'] > .popperArrow {
+  top: -8px;
+}
+.popperTooltip[data-popper-placement^='left'] > .popperArrow {
+  right: -8px;
+}
+.popperTooltip[data-popper-placement^='right'] > .popperArrow {
+  left: -8px;
+}
+.popperTooltip.simple {
+  padding: 0.25vh 1vw 0.25vh 1vw;
+  background-color: #444;
+  color: #FFF;
+  box-shadow: 4px 6px 6px 2px rgba(0,0,0,0.2);
+  border-radius: 5px;
+  border: 1px solid #888;
+}
+
+
+/*********************************************************
+  Context Menu (FloriaContextMenu)
+**********************************************************/
+.contextMenu, .contextMenu_tabs {
+  position: absolute;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  filter: drop-shadow(0px 0px 2px #666);
+  padding: 5px 15px 15px 15px;
+  z-index: 99999999;
+}
+.contextMenu li, .contextMenu_tabs li {
+  cursor: pointer;
+  padding: 3px 5px 3px 5px;
+}
+.contextMenu li:hover, .contextMenu_tabs li:hover {
+  background-color: #eee;
+}
+
+
+/*********************************************************
+  Tab Container (FloriaTabs)
+
+  Two independent, fully decoupled skins live side by side:
+
+    ".tabContainer"           — CLASSIC skin (the original, unchanged look).
+                                 This remains the default: FloriaTabs(...)
+                                 called without a "skin" argument renders
+                                 exactly as it always has — fully backward
+                                 compatible.
+
+    ".tabContainer--modern"   — new NUMBER 2B "Material-ish" skin: flat
+                                 header, no per-tab borders/pills, and a
+                                 single animated underline indicator that
+                                 slides under the selected tab. Opt in by
+                                 passing skin="modern" to FloriaTabs(); the
+                                 modifier class is added ALONGSIDE (not
+                                 instead of) ".tabContainer", so the shared
+                                 structural/layout rules below (position,
+                                 sizing, .tabBody scrolling, etc.) still
+                                 apply to both skins — only the header's
+                                 visual appearance is swapped, never
+                                 overriding a classic declaration.
+
+  ".tabContainer--modern" also declares its own small set of CSS custom
+  properties (--tabs-*) as its own local design tokens: this keeps every
+  sub-rule of THIS skin consistent and gives future tweaks a single place
+  to change, without inventing an app-wide theming layer.
+**********************************************************/
+
+.tabContainer {
+  position: relative;
+  left: 0px;
+  width: 99%;
+  top: 0px;
+  height: 99%;
+  /* border: 1px solid black;   */
+}
+
+.tabContainer .tabHeader {
+  position: relative; /* anchors the absolutely-positioned .tabHelpIcon below, for both skins */
+}
+
+.tabContainer .tabBody {
+  position: absolute;
+  top: 2em;
+  bottom: 0px;
+  left: 0px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tabContainer .tabBody > DIV {
+  position: relative;
+  height: 100%;
+  -webkit-overflow-scrolling: touch;
+  overflow: auto;
+  scrollbar-width: thin;
+  display: none;
+}
+
+.tabContainer .tabBody > DIV.selected {
+  display: block;
+  padding: 0px 1vw 0px 1vw;
+}
+
+/* ---- Classic skin (default) ---- */
+
+.tabContainer .tabHeader {
+  border-bottom: 1px solid #EEE;
+  box-shadow: 0 4px 2px -0px #EEE;
+  margin: 2px 0px 0px -20px;
+}
+
+.tabContainer .tabHeader SPAN {
+  border: 1px solid #BBB;
+  margin-left: 0px;
+  border-radius: 6px 6px 0 0;         /* slightly rounded top edges */
+  padding: 3px 20px 3px 10px;
+  cursor: pointer;
+  transition-duration: 350ms;
+  user-select: none;
+}
+.tabContainer .tabHeader SPAN:first-child {
+  margin-left: 20px;
+}
+
+.tabContainer .tabHeader span.selected {
+  background-color: #e8f4ff;          /* softer blue for a lighter modern look */
+  color: #1a3d5d;                     /* deeper blue for good contrast */
+  font-weight: 600;                   /* semi-bold instead of bold */
+  text-decoration: none;              /* remove underline for a cleaner feel */
+  border-radius: 20px 100px 0px 0px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* subtle shadow for depth */
+  border-bottom: 2px solid #1a3d5d;   /* active indicator instead of underline */
+  transition: all 0.2s ease-in-out;   /* smooth hover/selection transitions */
+  padding: 3px 50px 3px 10px;
+}
+
+/* Optional: hover state for unselected tabs */
+.tabContainer .tabHeader span:not(.selected):hover {
+  background-color: #f4faff;
+  color: #1a3d5d;
+  cursor: pointer;
+}
+
+
+/* ---- Modern skin ("Material-ish" underline / indicator style) ----
+   Opt in with: new FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, "modern") */
+
+.tabContainer.tabContainer--modern {
+  --tabs-text            : var(--text-color, #56708a);
+  --tabs-text-muted      : color-mix(in oklab, var(--tabs-text) 82%, #FFF 18%);
+  --tabs-accent          : var(--header-secondary, #1E3A5F);
+  --tabs-accent-bg-hover : color-mix(in oklab, var(--tabs-accent) 8%, #FFF 100%);
+  --tabs-underline       : var(--modalTitleGradient, linear-gradient(#f9fbfd, var(--baseline-color-shade, #acb)));
+  --tabs-border          : #e1e4e8;
+  --tabs-indicator-height: 3px;
+  --tabs-transition      : 180ms ease;
+
+  /* Unlike the classic skin, don't hard-code .tabBody's offset to a guessed
+     em value: the modern header's box (bigger padding, different font-size,
+     possible wrapping at narrow widths, browser zoom, ...) simply isn't the
+     same height as the classic header's, and any fixed number here is just
+     one more magic constant to re-tune every time the header styling
+     changes. Instead, lay .tabHeader/.tabBody out as a flex column so
+     .tabBody's top is always exactly the header's real rendered height,
+     whatever that happens to be. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* .tabHeader/.tabBody are positioned (position:absolute / top:2em) by the
+   shared classic rules above - override back to normal flex-item flow for
+   the modern skin, so the flex column on .tabContainer--modern above does
+   the sizing (no hard-coded offset needed). */
+.tabContainer--modern .tabBody {
+  position: relative;
+  flex: 1 1 auto;
+  top: auto;
+  bottom: auto;
+  min-height: 0; /* allow the flex item to shrink below its content's natural height so its own overflow:hidden can kick in */
+}
+
+.tabContainer--modern .tabHeader {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin: 0px;
+  padding: 0px 4px;
+  border-bottom: 1px solid var(--tabs-border);
+  box-shadow: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabContainer--modern .tabHeader::-webkit-scrollbar {
+  display: none;
+}
+
+.tabContainer--modern .tabHeader SPAN {
+  position: relative;
+  display: inline-block;
+  border: none;
+  border-radius: 0px;
+  margin-left: 0px;
+  padding: 0.6em 1em;
+  font-weight: 500;
+  color: var(--tabs-text-muted);
+  background: transparent;
+  white-space: nowrap;
+  transition: color var(--tabs-transition), background-color var(--tabs-transition);
+}
+.tabContainer--modern .tabHeader SPAN:first-child {
+  margin-left: 0px;
+}
+
+/* Sliding underline indicator, per-tab (no shared/animated bar element needed:
+   each tab owns one, invisible until selected, so no extra markup/JS required).
+   Uses the same gradient as the dialog's own .modalTitle bar (--modalTitleGradient)
+   so the "active tab" indicator visually ties back to the dialog header above it. */
+.tabContainer--modern .tabHeader SPAN::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 3px;
+  height: var(--tabs-indicator-height);
+  border-radius: 3px 3px 0 0;
+  background: var(--tabs-underline);
+  opacity: 0;
+  transform: scaleX(0.6);
+  transform-origin: center;
+  transition: opacity var(--tabs-transition), transform var(--tabs-transition);
+}
+
+.tabContainer--modern .tabHeader span:not(.selected):hover {
+  color: var(--tabs-text);
+  background: var(--tabs-accent-bg-hover);
+  cursor: pointer;
+}
+
+.tabContainer--modern .tabHeader span.selected {
+  color: var(--tabs-accent);
+  font-weight: 600;
+  text-decoration: none;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: none;
+  border-radius: 0px;
+  padding: 0.6em 1em;   /* override classic's asymmetric selected-state padding */
+}
+.tabContainer--modern .tabHeader span.selected::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+
+/*********************************************************
+  Tab Status Badges (FloriaTabs.setTabStatus())
+
+  Rendered on a TAB HEADER SPAN (not the help icon) via [data-tabstatus="busy|success|failure"],
+  set/cleared by FloriaTabs.setTabStatus() — see its docs in module-dialog.js. Mirrors a familiar
+  browser-tab UX: a background tab running a long task shows a small looping spinner; once it
+  finishes, a success/failure dot takes its place (with a brief, ONE-TIME pop/shake flourish so
+  it's noticeable, then settling to a static dot) and stays there until the user actually clicks
+  over to that tab, which clears it automatically (see select() in module-dialog.js).
+
+  Deliberately implemented as ::before (not ::after): the modern skin's sliding underline indicator
+  already owns ::after on these same SPANs (see ".tabContainer--modern .tabHeader SPAN::after"
+  above) — a single element can only ever render ONE ::after box, so reusing it here would silently
+  replace/break the underline instead of layering on top of it. ::before is untouched by either
+  skin, so this single rule set works identically for classic AND modern with no skin-specific
+  branching, and with no specificity fight against either skin's base SPAN rules (this only ever
+  ADDS position:relative + a new pseudo-element — nothing here overrides an existing property the
+  way ".tabHelpIcon" had to).
+**********************************************************/
+.tabContainer .tabHeader SPAN[data-tabid] {
+  position: relative; /* anchors the [data-tabstatus] badge below (modern skin already sets this
+                          itself, but classic's base SPAN rule does not) */
+}
+
+.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus]::before {
+  position: absolute;
+  /* Sized in em, relative to THIS pseudo-element's own font-size (set right below) rather than
+     fixed px — so the badge scales naturally with whatever font-size the tab header/skin ends up
+     using (including any future responsive/host-app overrides) instead of staying a fixed pixel
+     size forever. font-size itself resolves relative to the ambient (inherited) tab-label
+     font-size, same as any other font-size:__em declaration — everything else here (top/right/
+     width/height/border) is then expressed relative to THAT, which is the standard "set font-size
+     once, size the box off of it" icon pattern. */
+  top: 0.15em;
+  right: 0.2em;
+  width: 1.4em;
+  height: 1.4em;
+  font-size: 0.6em;
+  box-sizing: border-box;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* Busy — looping spinner ring (stays looping for as long as data-tabstatus="busy" is set). */
+.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="busy"]::before {
+  content: "";
+  background: transparent;
+  border: 0.2em solid rgba(85,121,198,0.25);
+  border-top-color: #5579c6;
+  animation: tabStatusSpin 0.8s linear infinite;
+}
+
+/* Success — green dot with a check mark; a short pop-in flourish, then remains static. */
+.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="success"]::before {
+  content: "\2713"; /* ✓ */
+  background: #22c55e;
+  border: 1px solid #15803d;
+  animation: tabStatusPop 0.4s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* Failure — red dot with an × mark; a short pop-in + shake flourish, then remains static. */
+.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="failure"]::before {
+  content: "\2715"; /* ✕ */
+  background: #ef4444;
+  border: 1px solid #b91c1c;
+  animation: tabStatusPop 0.4s cubic-bezier(.34,1.56,.64,1) both,
+             tabStatusShake 0.4s ease 0.4s both;
+}
+
+@keyframes tabStatusSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes tabStatusPop {
+  0%   { transform: scale(0);    opacity: 0; }
+  60%  { transform: scale(1.3);  opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes tabStatusShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-2px); }
+  40%      { transform: translateX(2px); }
+  60%      { transform: translateX(-2px); }
+  80%      { transform: translateX(2px); }
+}
+
+
+/*********************************************************
+  Tab Help Icon + Popover (FloriaTabs' optional helpUrl)
+
+  ".tabHelpIcon" — the small "(?)" affordance rendered to the right of the tab headers when a
+  FloriaTabs is constructed with a helpUrl. Absolutely positioned against ".tabHeader" (given
+  position:relative above, for both skins) so it never participates in the classic skin's
+  non-flex header layout, nor competes for space in the modern skin's flex header.
+
+  ".tabHelpPopover"/"tabHelpTooltip" — the FloriaTooltipDialog content shown when the icon is
+  clicked: a self-contained card (its own close "×", scrollable body) rather than a bare content
+  dump, since a FloriaTooltipDialog has no title bar/close button of its own (unlike FloriaDialog).
+**********************************************************/
+/*
+   NOTE: both skins style ".tabHeader SPAN" directly (classic: ".tabContainer .tabHeader SPAN";
+   modern: ".tabContainer--modern .tabHeader SPAN") — each with specificity (0,0,2,1) — setting
+   position/border/padding/border-radius/margin for regular TAB spans. A plain ".tabHelpIcon"
+   class rule (specificity (0,0,1,0)) loses to both of those regardless of source order, which is
+   why this icon used to render as a flow-positioned, padded, square "extra tab" instead of an
+   absolutely-positioned circle pinned to the header's right edge. Qualifying the selector below
+   with both skins' own ancestor classes + SPAN + ".tabHelpIcon" bumps specificity to (0,0,3,1),
+   reliably beating both skins' span rules for every property that must differ (position, border,
+   padding, border-radius, margin-left, ...) — everything NOT overridden here (color, background,
+   box-shadow, ...) still simply comes from this same, now-winning rule.
+*/
+.tabContainer .tabHeader SPAN.tabHelpIcon,
+.tabContainer--modern .tabHeader SPAN.tabHelpIcon {
+  position: absolute;
+  /* Same em-relative-to-own-font-size pattern as the status badge above (see its comment) — the
+     icon's overall footprint (width/height/right/top offsets) all derive from font-size below,
+     so the whole thing scales together if the ambient tab-header font-size ever changes, instead
+     of staying pinned to today's fixed pixel dimensions. */
+  right: 0.7em;
+  top: 50%;
+  left: auto;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: 1.55em;
+  height: 1.55em;
+  min-width: 1.55em;
+  font-size: 0.95em;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  user-select: none;
+  color: #5a6b7d;
+  background: #fbfcfe;
+  border: 1px solid #dde3ea;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.6) inset;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1;
+  margin-left: 0;
+  padding: 0;
+  z-index: 20;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.tabHelpIcon::before {
+  content: "i";
+}
+.tabContainer .tabHeader SPAN.tabHelpIcon:hover,
+.tabContainer--modern .tabHeader SPAN.tabHelpIcon:hover {
+  background: #4f6fb0;
+  color: #fff;
+  border-color: #4f6fb0;
+  box-shadow: 0 2px 6px rgba(79,111,176,0.35);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.popperTooltip.tabHelpTooltip {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06);
+  padding: 0;
+}
+.tabHelpPopover {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.tabHelpClose {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 22px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  z-index: 1;
+  transition: color 0.15s ease;
+}
+.tabHelpClose:hover {
+  color: #333;
+}
+.tabHelpBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 1.4em 1.6em;
+  font-size: 95%;
+  line-height: 1.5;
+}
+.tabHelpLoading {
+  padding: 2em;
+  text-align: center;
+  color: #888;
+}
+
+
+/*********************************************************
+  Modal Alert (FloriaAlert / FloriaAlertSimple)
+**********************************************************/
+.floriaAlertOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease, backdrop-filter 0.3s ease, background 0.3s ease;
+}
+
+.floriaAlertOverlay.show {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+}
+
+.floriaAlertBox {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  transform: scale(0.5);
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.3s ease;
+}
+
+.floriaAlertBox.show {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.floriaAlertBoxAuto {
+  max-width: 90vw;
+  max-height: 90vh;
+  min-width: 300px;
+  width: auto;
+  height: auto;
+}
+
+.floriaAlertClose {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 28px;
+  font-weight: bold;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  z-index: 1;
+}
+
+.floriaAlertClose:hover {
+  color: #333;
+}
+
+.floriaAlertContent {
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
+  height: 100%;
+  font-size: 110%;
+}
+
+.floriaAlertBoxAuto .floriaAlertContent {
+  /* Auto-sized boxes must NOT set a percentage width here: .floriaAlertBoxAuto itself is
+     "width: auto" (shrink-to-fit based on content), so a percentage width on this child would
+     be relative to an indeterminate box width, which browsers resolve inconsistently - in
+     practice it collapses toward the box's min-width (300px) instead of measuring the real
+     content, causing short dialogs (e.g. a Yes/No confirm) to be too narrow and wrap/overflow
+     their button rows. Using "auto" here lets the box grow to fit the actual content, capped
+     by the same viewport budget as .floriaAlertBoxAuto's max-width (90vw), minus the box's own
+     left/right padding (20px + 20px). Text-heavy alerts (see module-tours.js) still wrap fine
+     within that cap. */
+  width: auto;
+  max-width: calc(90vw - 40px);
+  margin-left: 0;
+  margin-right: 0;
+  overflow: auto;
+  max-height: calc(90vh - 40px);
+  padding: 2em;
+}
+
+.floriaAlertBox .buttonLogin {
+  scale: 0.75;
+}
+
+.floriaAlertSimpleMessage {
+  font-size: 110%;
+  font-weight:600;
+  text-align: center;
+}
+.floriaAlertSimpleSubMessage {
+  font-size: 80%;
+  text-align: center;
+  margin-top: 10px;
+}
