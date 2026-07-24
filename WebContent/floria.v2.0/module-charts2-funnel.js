@@ -19,7 +19,7 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 import { FloriaDOM } from "./module-dom.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2-funnel.css", import.meta.url).pathname);
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2-funnel.css", import.meta.url).href);
 
 // Inject the funnel-graph-js stylesheet (renders .svg-funnel-js labels & layout)
 (function _injectFunnelGraphCSS() {

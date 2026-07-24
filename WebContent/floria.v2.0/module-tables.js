@@ -20,7 +20,7 @@ import { FloriaDOM         }  from "./module-dom.js";
 import { FloriaText        }  from "./module-text.js";
 import { FloriaDate        }  from "./module-date.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-tables.css", import.meta.url).pathname);
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-tables.css", import.meta.url).href);
 
 
 

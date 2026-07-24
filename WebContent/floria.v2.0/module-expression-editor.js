@@ -21,7 +21,7 @@ import { FloriaText                                           } from "./module-t
 import { FloriaTabs, FloriaTooltipDialog, FloriaAlertSimple   } from "./module-dialog.js";
 import { FloriaFactories                                      } from "./module-factories.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-editor.css", import.meta.url).pathname);
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-editor.css", import.meta.url).href);
 
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FloriaExpressionEditor
@@ -1122,15 +1122,21 @@ export class FloriaExpressionEditor
        this._onChange(this.getTree());
     }
 
-   _renderValuesInner(expr)
-    {
-      var vals = Array.isArray(expr.vals) ? expr.vals : [];
-      var chips = vals.map(function(v, i) {
-          return '<span class="fee-chip">'+_esc(v)+(this._readOnly===true?'':'<button type="button" class="fee-chip-x" data-vidx="'+i+'" title="Remove">&times;</button>')+'</span>';
-        }, this).join('');
-      var input = this._readOnly === true ? '' : '<input type="text" class="fee-value-input" placeholder="Add value…">';
-      return chips + input;
-    }
+    _renderValuesInner(expr)
+     {
+       // The text input is rendered FIRST (not the chips) so it always stays on the same first
+       // line as the var/func <select>s above it, lining up nicely with the rest of the row's
+       // controls — any already-added value chips are appended AFTER it and simply wrap onto
+       // their own line(s) below when there isn't room, instead of pushing/misaligning the input
+       // itself off to a later line underneath them (which is what happened when chips came
+       // first in a flex-wrap container).
+       var vals = Array.isArray(expr.vals) ? expr.vals : [];
+       var chips = vals.map(function(v, i) {
+           return '<span class="fee-chip">'+_esc(v)+(this._readOnly===true?'':'<button type="button" class="fee-chip-x" data-vidx="'+i+'" title="Remove">&times;</button>')+'</span>';
+         }, this).join('');
+       var input = this._readOnly === true ? '' : '<input type="text" class="fee-value-input" placeholder="Add value…">';
+       return input + chips;
+     }
 
    // ── Event delegation (bound once per panel instance) ───────────────────
 

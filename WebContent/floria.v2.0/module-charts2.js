@@ -27,7 +27,7 @@ import ChartDataLabels  from "/static/jslibs/chartjs-plugin-datalabels-2.2.0/cha
 
 import {map,tileLayer,geoJson, circleMarker, Icon, marker,latLng, latLngBounds,control,DomUtil,Control,DomEvent} from "/static/jslibs/leaflet/leaflet-src.esm.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2.css", import.meta.url).pathname);
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2.css", import.meta.url).href);
 FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, "/static/jslibs/leaflet/leaflet.css");
 
 export var FloriaCharts2 = { ColorSchemes : ChartTheme.colorSchemes, ChartJS: Chart };

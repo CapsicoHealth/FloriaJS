@@ -20,7 +20,7 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft } from "https://cdn.jsdelivr.net/npm/d3-sankey@0.12/+esm";
 import { FloriaDOM } from "./module-dom.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2-sankey.css", import.meta.url).pathname);
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-charts2-sankey.css", import.meta.url).href);
 
 
 // ============================================================================

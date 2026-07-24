@@ -238,7 +238,13 @@
 /* ── Leaf (condition) editor ──────────────────────────────────────────── */
 .fee-leaf {
   display: flex;
-  align-items: center;
+  /* flex-start (not center): once value chips wrap the .fee-values box onto multiple lines it
+     grows taller than the var/func <select>s sitting next to it — align-items:center then
+     vertically centers those (single-line-tall) selects against that now-taller box, visually
+     dropping them down out of line with the input at its top. flex-start pins every child's TOP
+     edge to the same line regardless of how tall .fee-values ends up, so the input (and the
+     selects beside it) always start flush together. */
+  align-items: flex-start;
   gap: 6px;
   flex-wrap: wrap;
   background: #f9fafb;
