@@ -601,6 +601,25 @@ on every side.  This prevents the user from accidentally panning the entire
 canvas out of view.  The clamp re-runs on every zoom change because the
 canvas's pixel dimensions change with zoom.
 
+### I. `forceElementStyle()` guards against host-page CSS stomping on fills
+SVG presentation attributes (`fill="..."`, `stroke="..."`, etc. — the way
+JointJS colours shapes) have the **lowest possible priority** in the CSS
+cascade: any matching author-stylesheet rule wins over them, even a bare
+tag selector like `rect { fill: transparent; }`, regardless of specificity.
+If the host page's own global CSS happens to define such a rule anywhere
+(this has been observed in practice — a broad reset added for D3 charts
+elsewhere in a consumer app), every diagram shape whose fill/stroke is set
+only via `element.attr(...)` can silently render as invisible/transparent,
+with no error and no visual clue that the attribute "isn't taking".
+
+`forceElementStyle(node, styles)` (exported) mirrors the same values onto the
+node's inline `style` instead/as well — inline style always outranks an
+external stylesheet's non-`!important` rule, so this makes the diagram immune
+to this entire class of host-page CSS collisions. Used internally for the
+canvas boundary rect and the default item body fill; application `draw()`
+implementations that set their own colours (see `agentic-flow-studio.js` for
+an example) should call it too for the same reason.
+
 ---
 
 ## 11. Known Constraints & Gotchas
@@ -614,3 +633,5 @@ canvas's pixel dimensions change with zoom.
 | 5 | **`_findNonOverlappingOffset` is O(N²)** in pathological cases (many items, all occupied spiral positions). Acceptable for typical diagram sizes (<100 nodes). |
 | 6 | **`extras` is shallow-copied.** Nested objects inside `extras` are shared by reference after `serialize()` and restored as new shallow copies after `load()`. Deep nesting in `extras` is not recommended. |
 | 7 | **`undo()` / `redo()` do not restore `extras`.** `_restoreState()` (used by undo/redo) only restores positions and links — it does not re-apply `extras` because the undo stack predates the `extras` feature. If `extras` state must be undo-able, the application should manage it separately or `_restoreState` should be extended. |
+| 8 | **No bundled CSS — and none needed.** `@joint/core@4.x` ships no stylesheet at all (confirmed: there is no `dist/joint.css` in the npm package for this version); everything is driven by inline SVG attributes/JS. Earlier revisions of this module injected a `<link>` to that nonexistent file, which always 404'd (and could show as a confusing "MIME type mismatch" console error rather than a plain 404, depending on how the CDN/server serves its 404 body). That injection has been removed — it was never actually required. |
+| 9 | **Presentation attributes can be overridden by host-page CSS.** See §10-I / `forceElementStyle()`. Any consumer `draw()` that sets `fill`/`stroke` via `element.attr(...)` should also mirror those values with `forceElementStyle()` if the shape ever appears to silently ignore its configured colour — this is a strong sign a global stylesheet elsewhere on the page has a rule matching the same tag/class. |
