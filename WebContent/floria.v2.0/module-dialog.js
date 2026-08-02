@@ -547,14 +547,24 @@ export function FloriaContextMenu(elementId, options, cssPostfix, callbackFunc, 
     that component for any anchored, dismissable HTML popup) anchored to the icon itself, with
     its own close ("×") affordance and click-outside-to-dismiss behavior. Purely additive: a
     FloriaTabs with no helpUrl renders and behaves exactly as before.
+
+ position (optional): where the tab headers are rendered relative to the tab body — one of
+    "top" (default), "bottom", "left", or "right". Purely additive/backward compatible: omitting
+    it (or passing "top") renders exactly as before. See module-dialog.css's
+    ".tabContainer--pos-*" rules for the actual layout — headers flip to a vertical column for
+    "left"/"right", with each tab's label text rotated to run vertically (-90deg on the left,
+    so it reads bottom-to-top; +90deg on the right, so it reads top-to-bottom), and "bottom"
+    simply reorders the same top layout to the other edge.
  */
-export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, skin, helpUrl)
+export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, skin, helpUrl, position)
  {
    this._elementId = elementId;
    this._tabs = tabs;
    this._currentTabId = null;
    this._singleDiv = singleDiv || false;
    this._skinClass = (skin != null && skin != "classic") ? " tabContainer--"+skin : "";
+   this._position = (position == null || position == "top") ? "top" : position;
+   this._posClass = this._position != "top" ? " tabContainer--pos-"+this._position : "";
    this._helpUrl = helpUrl || null;
    this._helpDialog = null;
 
@@ -614,7 +624,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
 
    this.show = function(defaultTabId = 0)
     {
-      var str = '<DIV class="tabContainer'+this._skinClass+'"><DIV id="'+elementId+'_TABHEADERS" class="tabHeader">';
+      var str = '<DIV class="tabContainer'+this._skinClass+this._posClass+'"><DIV id="'+elementId+'_TABHEADERS" class="tabHeader">';
       for (var i = 0; i < this._tabs.length; ++i)
        {
          var t = this._tabs[i];
@@ -774,9 +784,10 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
           return;
        }
 
-      // Selecting a tab acknowledges any pending status badge on it — mirrors a browser tab's
-      // spinner/notification dot clearing the moment you actually switch to that tab.
-      if (t._status != null)
+      // Selecting a tab acknowledges a pending "done" status badge on it — mirrors a browser tab's
+      // notification dot clearing the moment you actually switch to that tab. A "busy" status is
+      // NOT cleared here, since the work is still in progress regardless of which tab is focused.
+      if (t._status == "success" || t._status == "failure")
        this.setTabStatus(i, null);
 
       if (this._currentTabId != null)

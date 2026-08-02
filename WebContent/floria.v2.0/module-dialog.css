@@ -114,7 +114,7 @@
     left: 0px;
     right: 0px;
     background-color: #FFFFFF;
-    padding: 10px;
+    padding: 0.25em;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -281,7 +281,7 @@
 .tabContainer {
   position: relative;
   left: 0px;
-  width: 99%;
+  width: 100%;
   top: 0px;
   height: 99%;
   /* border: 1px solid black;   */
@@ -311,7 +311,7 @@
 
 .tabContainer .tabBody > DIV.selected {
   display: block;
-  padding: 0px 1vw 0px 1vw;
+  /* padding: 0px 1vw 0px 1vw; */
 }
 
 /* ---- Classic skin (default) ---- */
@@ -465,6 +465,204 @@
 .tabContainer--modern .tabHeader span.selected::after {
   opacity: 1;
   transform: scaleX(1);
+}
+
+
+/*********************************************************
+  Tab Position variants (FloriaTabs' optional "position" argument)
+
+  Default layout (no ".tabContainer--pos-*" class) is unchanged: header on top, body below,
+  exactly as before ("top"). These three modifier classes are ADDITIVE, applied alongside
+  whichever skin class ("tabContainer--modern" or none/classic) is already in play, and simply
+  reflow the very same .tabHeader/.tabBody children via flexbox — no skin-specific overrides
+  needed since both skins' header/body sizing rules (border, padding, span styling, underline,
+  status badges, help icon, ...) are left completely untouched; only position/orientation change.
+
+    --pos-bottom : header and body swap edges (header below the body).
+    --pos-left   : header becomes a vertical column down the left edge; each tab label is
+                   rotated -90deg (reads bottom-to-top), so the container reads like a classic
+                   vertical side-tab UI.
+    --pos-right  : mirror of --pos-left, header column down the right edge; each tab label is
+                   rotated +90deg (reads top-to-bottom) instead.
+
+  NOTE ON SPECIFICITY: every selector below is deliberately written as the COMPOUND
+  ".tabContainer.tabContainer--pos-*" (both classes on the SAME element — matching how
+  FloriaTabs.show() actually emits them: class="tabContainer tabContainer--modern tabContainer--pos-right")
+  rather than a bare ".tabContainer--pos-*". The modern skin's own rules are ALSO compound
+  (".tabContainer.tabContainer--modern", ".tabContainer--modern .tabHeader", etc.) — a bare single
+  -class selector has LOWER specificity than those and would silently lose regardless of source
+  order (this is what caused the very first version of this feature to have no visible effect
+  when combined with skin="modern").
+
+  That's necessary but NOT sufficient: any HOST APP page that styles FloriaTabs (which is common —
+  see e.g. this component's own consuming apps overriding ".some-app-class .tabContainer" to fit
+  its own flex shell) can ALSO produce a same-specificity (0,0,2,0) two-class descendant selector
+  purely by coincidence (its own wrapper class + ".tabContainer"), and there is NO reliable way to
+  guarantee module-dialog.css's own <link> always loads before every possible host stylesheet in
+  every possible app (in practice it often loads FIRST, since it's injected by the very first
+  Floria import a page makes — which is exactly what let a real host app's own
+  ".cap-analytics .tabContainer { flex-direction: column; width:100%; ... }" rule silently win a
+  same-specificity tie by simply being the later stylesheet on the page, undoing --pos-right's
+  row-reverse). Rather than depend on script load order across unrelated files, the handful of
+  properties that are load-bearing for the actual layout (display/flex-direction and the handful of
+  position/size resets that undo the classic skin's absolute positioning) are marked !important
+  below — purely structural, never colors/fonts/spacing, so a host app's own visual overrides
+  (borders, padding, backgrounds, ...) still layer on top exactly as before.
+**********************************************************/
+.tabContainer.tabContainer--pos-bottom,
+.tabContainer.tabContainer--pos-left,
+.tabContainer.tabContainer--pos-right {
+  display: flex !important;
+}
+.tabContainer.tabContainer--pos-bottom {
+  flex-direction: column-reverse !important;
+}
+.tabContainer.tabContainer--pos-left {
+  flex-direction: row !important;
+}
+.tabContainer.tabContainer--pos-right {
+  flex-direction: row-reverse !important;
+}
+
+/* Un-do the classic skin's absolute positioning (top:2em / etc.) for ALL four variants: the
+   flex layouts above size .tabHeader/.tabBody purely off flex order + flex-basis, so anything
+   still trying to absolutely-position itself would just overlap instead of flowing correctly.
+   (The modern skin already does this itself via its own flex-column rules, so this mainly
+   matters for the classic skin, but applying it unconditionally is harmless/idempotent for
+   modern too.) */
+.tabContainer.tabContainer--pos-bottom .tabHeader,
+.tabContainer.tabContainer--pos-left   .tabHeader,
+.tabContainer.tabContainer--pos-right  .tabHeader {
+  position: relative !important;
+  flex: 0 0 auto !important;
+}
+.tabContainer.tabContainer--pos-bottom .tabBody,
+.tabContainer.tabContainer--pos-left   .tabBody,
+.tabContainer.tabContainer--pos-right  .tabBody {
+  position: relative !important;
+  top: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: auto !important;
+  flex: 1 1 auto !important;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* --pos-bottom keeps a normal horizontal header, just re-ordered below the body via
+   flex-direction:column-reverse above — flip its border/shadow to the top edge instead of the
+   bottom edge (visually it now sits just above the body, not below it). */
+.tabContainer.tabContainer--pos-bottom .tabHeader {
+  border-bottom: none;
+  border-top: 1px solid #EEE;
+  box-shadow: 0 -4px 2px -0px #EEE;
+}
+
+/* --pos-left / --pos-right: header becomes a vertical column of stacked tab labels running
+   down the full height of the container, sized to its widest label (flex column, shrink-to-fit
+   width), with the body taking up the remaining horizontal space. Also overrides the modern
+   skin's own ".tabContainer--modern .tabHeader" (display:flex; flex-direction:row; overflow-x:auto;
+   ...) which would otherwise keep the labels running horizontally instead of stacked vertically. */
+.tabContainer.tabContainer--pos-left .tabHeader,
+.tabContainer.tabContainer--pos-right .tabHeader {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  overflow: visible;
+  border-bottom: none;
+  box-shadow: none;
+  margin: 0;
+  padding: 20px 0 0 0;
+  gap: 2px;
+  width: auto !important;
+}
+.tabContainer.tabContainer--pos-left .tabHeader SPAN[data-tabid],
+.tabContainer.tabContainer--pos-right .tabHeader SPAN[data-tabid] {
+  writing-mode: vertical-rl !important;
+  white-space: nowrap;
+  margin-left: 0;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.tabContainer.tabContainer--pos-left .tabHeader SPAN:first-child,
+.tabContainer.tabContainer--pos-right .tabHeader SPAN:first-child {
+  margin-left: 0;
+}
+/* vertical-rl alone renders glyphs stacked top-to-bottom (equivalent to the label rotated
+   +90deg) — already correct as-is for the RIGHT edge. For the LEFT edge, flip it a further
+   180deg so the label instead reads bottom-to-top (equivalent to -90deg overall), matching the
+   familiar "vertical tab on the left" convention. */
+.tabContainer.tabContainer--pos-left .tabHeader SPAN[data-tabid] {
+  transform: rotate(180deg) !important;
+}
+
+/* Selected-tab indicator repositioning for --pos-left / --pos-right.
+
+   Both skins' "active tab" indicator is a PHYSICAL-BOTTOM accent (classic: ".selected"'s
+   border-bottom; modern: the sliding "SPAN::after" underline, pinned via bottom/left/right) —
+   designed for a horizontal, top-row tab strip, where "bottom" faces the .tabBody sitting below
+   it. Left as-is, it still renders at the tab's literal physical bottom here too, which for a
+   narrow/tall vertical tab (writing-mode: vertical-rl) is a mostly-meaningless little horizontal
+   mark near one end of the tab, rather than anything resembling "the active tab is highlighted".
+
+   The conventional vertical-tab-rail treatment instead runs the accent the tab's full HEIGHT,
+   along the INNER edge that actually faces the .tabBody: the LEFT edge for --pos-right (body sits
+   to its left), the RIGHT edge for --pos-left (body sits to its right). Because --pos-left's SPAN
+   ALSO carries "transform: rotate(180deg)" (for text orientation, above) — which visually flips
+   left↔right — both cases are achieved by targeting the SAME pre-transform physical side,
+   "left"/"border-left": --pos-right has no rotation so it renders left as-is; --pos-left's 180°
+   flip turns that same pre-transform left edge into the visually-rendered right edge. */
+
+/* Classic skin: swap the shared ".selected" rule's border-bottom accent for a border-left one
+   (reset border-bottom back to the same plain 1px gray as every other, unselected side).
+   Scoped with ":not(.tabContainer--modern)" — the modern skin doesn't use this border-based
+   ".selected" accent at all (it uses the ::after sliding underline, handled separately below), so
+   without this exclusion BOTH fixes would fire together on a modern-skin tab (this border-left
+   PLUS the ::after bar below), rendering as two redundant/overlapping accents at once instead of
+   one. */
+.tabContainer.tabContainer--pos-left:not(.tabContainer--modern) .tabHeader span.selected,
+.tabContainer.tabContainer--pos-right:not(.tabContainer--modern) .tabHeader span.selected {
+  border-bottom: 1px solid #BBB !important;
+  border-left: 3px solid #1a3d5d !important;
+  padding: 3px 20px 3px 10px !important; /* classic's ".selected" normally widens right padding to
+                                             50px to make room for a taller bottom accent that no
+                                             longer applies here — restore the plain padding */
+}
+
+/* Modern skin: reposition the sliding underline (::after) from a horizontal bar pinned to the
+   bottom, into a vertical bar pinned to the inner (left, pre-transform) edge, running the tab's
+   full height instead of its full width — and swap its show/hide transform from scaleX (horizontal
+   growth, meaningless for a vertical bar) to scaleY (vertical growth, matching). */
+.tabContainer.tabContainer--pos-left .tabHeader SPAN::after,
+.tabContainer.tabContainer--pos-right .tabHeader SPAN::after {
+  left: 3px !important;
+  right: auto !important;
+  bottom: 10px !important;
+  top: 10px !important;
+  width: var(--tabs-indicator-height, 3px) !important;
+  height: auto !important;
+  border-radius: 0 3px 3px 0;
+  transform: scaleY(0.6) !important;
+}
+.tabContainer.tabContainer--pos-left .tabHeader SPAN.selected::after,
+.tabContainer.tabContainer--pos-right .tabHeader SPAN.selected::after {
+  transform: scaleY(1) !important;
+}
+
+/* The "(?)" help icon is normally absolutely-positioned against the (horizontal) header's right
+   edge (see ".tabHelpIcon" further below) — for a vertical left/right header that no longer
+   makes sense, so pin it just below the tab column instead. */
+.tabContainer.tabContainer--pos-left .tabHeader SPAN.tabHelpIcon,
+.tabContainer.tabContainer--pos-right .tabHeader SPAN.tabHelpIcon {
+  position: relative;
+  writing-mode: horizontal-tb;
+  transform: none;
+  top: auto;
+  right: auto;
+  left: auto;
+  bottom: auto;
+  margin: 10px auto 0 auto;
 }
 
 
