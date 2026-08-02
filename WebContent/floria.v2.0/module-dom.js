@@ -1343,12 +1343,13 @@ export var FloriaDOM = {
       {
         this._done = false;
         this._e = document.getElementById(divId);
-        if (statusDivId != null && servletPath != null)
+        if (statusDivId != null)
          {
             this._statusDiv = document.getElementById(statusDivId);
             this._servletPath = servletPath;
          }
         this._start = new Date();
+        this.setStatusHtml = function(html) { that._statusDiv.innerHTML = html; }
         this.done = function() { this._done = true; return new Date().printDuration(this._start); }
         this.getStart = function() { return this._start; }
         let that = this;
@@ -1356,7 +1357,7 @@ export var FloriaDOM = {
            if (that._done == true)
             return;
            that._e.innerHTML = new Date().printDuration(that._start);
-           if (that._statusDiv != null)
+           if (that._servletPath != null && that._statusDiv != null)
             {
               let data = await FloriaAjax.jsonSyncFetch("/web/svcx/session/status?servletPath="+encodeURIComponent(that._servletPath));
               if (data?.message != null)

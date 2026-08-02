@@ -88,3 +88,20 @@ FloriaSVGIcons.ICONS.BOOKMARK = (title, color=FloriaSVGIcons.COLORS.primary, siz
 FloriaSVGIcons.ICONS.BOOKMARK_FILLED = (title, color=FloriaSVGIcons.COLORS.primary, size, fill=FloriaSVGIcons.COLORS.successGreen) => svgWrapper(`
     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
 `, title, color, size, fill);
+
+// DOCLIBRARY (open book — document library / management)
+FloriaSVGIcons.ICONS.DOCLIBRARY = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
+  <path d="M2 5.5c2-1 5-1 7 .5v13c-2-1.5-5-1.5-7-.5z"/>
+  <path d="M22 5.5c-2-1-5-1-7 .5v13c2-1.5 5-1.5 7-.5z"/>
+  <path d="M9 6v13"/>
+`, title, color, size);
+
+// DASHBOARD (rising trend line with data points on axes — activity / processing dashboard)
+FloriaSVGIcons.ICONS.DASHBOARD = (title, color=FloriaSVGIcons.COLORS.gray, size) => svgWrapper(`
+  <path d="M3 3v18h18"/>
+  <polyline points="6 16 10.5 11 14 13.5 20 6"/>
+  <circle cx="6" cy="16" r="1.1" fill="${color}"/>
+  <circle cx="10.5" cy="11" r="1.1" fill="${color}"/>
+  <circle cx="14" cy="13.5" r="1.1" fill="${color}"/>
+  <circle cx="20" cy="6" r="1.1" fill="${color}"/>
+`, title, color, size);
