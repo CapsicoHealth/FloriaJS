@@ -64,6 +64,8 @@ function paintRows(data, mappings, isTotalRow)
            if (map.title != null)
             {
               title = map.title;
+              if (FloriaDOM.isFunction(title) == true)
+               title = title(d);
               if (map.columns != null)
                for (var c = 0; c < map.columns.length; ++c)
                 title = title.replaceAll("$"+(c+1), d[map.columns[c]]);
@@ -175,6 +177,8 @@ HeatTable.paint = function(divId, data, mappings, dataDictionary, totalRowFields
 //     align       : 'left'|'right'|'center'  – default: 'right' for integer/number, else 'left'
 //     type        : 'string'|'string-ml'|'integer'|'number'|'date'|'datetime'|'boolean'
 //     renderer    : function(row)→html  OR  string e.g. "date('short')" | "datetime('long')" | "number(2)"
+//     title       : function(row)→string – optional; when present, its return value is set as the
+//                                          cell's "title" attribute (tooltip shown on hover).
 //     _sortOverride: function(row)→value – optional; when present, replaces the default field-value
 //                                          extraction during sorting. Useful when the rendered value
 //                                          differs from what should be sorted on (e.g. return -Infinity
@@ -190,7 +194,14 @@ HeatTable.paint = function(divId, data, mappings, dataDictionary, totalRowFields
 //                                          subset of rows selectable (e.g. inactive/locked users).
 //     wrap        : 'clip'|'nowrap'|'wrap'|'pre'  – text overflow behaviour (default: 'clip' for string/string-ml, 'wrap' for all other types)
 //                    'clip'   → single line, overflow hidden with ellipsis (…)
-//                    'nowrap' → single line, content never clipped — cell expands to fit
+//                    'nowrap' → single line, content never clipped — column automatically shrinks
+//                               to the width of its content (header label included) while other,
+//                               flexible columns absorb the remaining table width. Ideal for short
+//                               ids/counts/dates/small numeric columns. minWidth/maxWidth are
+//                               ignored on nowrap columns (they wouldn't make sense here).
+//                               NOTE: as soon as ANY column in the table uses wrap:'nowrap', the
+//                               whole table switches from table-layout:fixed to table-layout:auto
+//                               (required for the shrink-to-content trick to work).
 //                    'wrap'   → normal word-wrap
 //                    'pre'    → pre-wrap, preserves whitespace/newlines (classic string-ml behaviour)
 //     minWidth    : string            – CSS min-width value (e.g. '120px'). Ignored for wrap:'nowrap' columns.
@@ -265,6 +276,16 @@ function _ftEsc(s) {
 }
 
 function _ftVal(v) { return v == null || v === '' ? _FT_NA : v; }
+
+/** Escape a value for safe insertion into an HTML attribute (e.g. title="..."). */
+function _ftAttrEsc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 const _FT_RENDERERS = {
   'date': function(fmt) {
@@ -352,10 +373,15 @@ function _ftDefaultWrap(col) {
 /** Build the inline style attribute string for min/max width constraints.
  *  For gap columns only min-width is emitted (max-width is intentionally omitted so the
  *  browser doesn't collapse the spacer when the table is wide).
- *  For nowrap columns both are suppressed — the cell sizes itself to its content. */
+ *  For nowrap columns, minWidth/maxWidth are ignored (they wouldn't make sense combined with
+ *  shrink-to-content) and instead we emit width:1% — combined with white-space:nowrap (applied
+ *  via the ftbl-wrap-nowrap class) this is the standard trick that makes a column shrink to the
+ *  width of its content while sibling flexible columns absorb the remaining space. This requires
+ *  the table to NOT be using table-layout:fixed — see _hasNowrapCol handling in the constructor
+ *  and render(). */
 function _ftWidthStyle(col) {
   if (col.gap) return col.minWidth ? ' style="min-width:' + col.minWidth + '"' : '';
-  if (col._wrap === 'nowrap' || col.wrap === 'nowrap') return '';
+  if (col._wrap === 'nowrap' || col.wrap === 'nowrap') return ' style="width:1%"';
   var parts = [];
   if (col.minWidth) parts.push('min-width:' + col.minWidth);
   if (col.maxWidth) parts.push('max-width:' + col.maxWidth);
@@ -390,8 +416,13 @@ export class FloriaTable {
    * @param {boolean}  [showRowNumbers=true]   – when true (default), prepends a 1-based display
    *                                             row-number column. The number always reflects the
    *                                             current display order, not the original data index.
+   * @param {number}   [preSelectedIndex=null] – 0-based index into `data` (original, unfiltered
+   *                                             order) whose row should render as pre-selected
+   *                                             (see .ftbl-row-selected) as soon as the table is
+   *                                             first painted — no click / handler invocation,
+   *                                             purely visual. Ignored if out of range.
    */
-  constructor(parentDivId, columns, data, enableFilter = true, wideTable = false, showRowNumbers = true) {
+  constructor(parentDivId, columns, data, enableFilter = true, wideTable = false, showRowNumbers = true, preSelectedIndex = null) {
     this._id             = parentDivId;
     this._columns        = (columns || []).map(c => ({
       ...c,
@@ -405,7 +436,25 @@ export class FloriaTable {
     this._wideTable      = wideTable;
     this._showRowNumbers = showRowNumbers;
     this._hasSummary     = (columns || []).some(c => c.summary === true);
-    this._hasClickCol    = (columns || []).some(c => typeof c.onClickHandler === 'function');
+    // Click-handler bookkeeping: when exactly ONE column carries an onClickHandler, the whole
+    // row becomes clickable (pointer cursor + click-anywhere) instead of just that cell — see
+    // _singleClickColIdx usage in render()/_renderRows(). With 2+ click columns, each retains
+    // its own per-cell "link" styling/behaviour (row itself is not globally clickable).
+    var _clickIdxs      = (columns || []).reduce((acc, c, i) => { if (typeof c.onClickHandler === 'function') acc.push(i); return acc; }, []);
+    this._hasClickCol      = _clickIdxs.length > 0;
+    this._singleClickColIdx = _clickIdxs.length === 1 ? _clickIdxs[0] : null;
+    // Any column explicitly marked wrap:'nowrap' needs the table to use table-layout:auto
+    // (not the default fixed layout for non-wide tables) so it can shrink to its content width —
+    // see _ftWidthStyle()'s width:1% trick, which only works under auto layout.
+    this._hasNowrapCol   = (columns || []).some(c => c.wrap === 'nowrap');
+    // The currently "selected" row (by object reference) — set whenever a click-column's
+    // handler is invoked (single- or multi-click-column mode alike), or up front via
+    // preSelectedIndex. Rendered with a left accent border (see .ftbl-row-selected in
+    // module-tables.css). Naturally clears itself across setData() calls since the old row
+    // objects are no longer present in the new data.
+    this._selectedRow    = (preSelectedIndex != null && this._data[preSelectedIndex] != null)
+                          ? this._data[preSelectedIndex]
+                          : null;
     this._filterText     = '';
     this._sortCol        = null;
     this._sortDir        = 1;
@@ -437,7 +486,7 @@ export class FloriaTable {
 
     host.innerHTML = filterBar
       + `<div class="ftbl-body${this._wideTable ? ' ftbl-wide' : ''}" id="${this._id}_BODY">
-           <table class="ftbl-table${this._wideTable ? '' : ' ftbl-layout-fixed'}" id="${this._id}_TBL">
+           <table class="ftbl-table${(this._wideTable || this._hasNowrapCol) ? '' : ' ftbl-layout-fixed'}" id="${this._id}_TBL">
              <thead id="${this._id}_HEAD"></thead>
              <tbody id="${this._id}_BODY_TBL"></tbody>
              ${this._hasSummary ? `<tfoot id="${this._id}_FOOT"></tfoot>` : ''}
@@ -472,8 +521,27 @@ export class FloriaTable {
       this._renderRows();
     });
 
-    // Single delegated click handler for onClickHandler columns on the tbody
-    if (this._hasClickCol) {
+    // Single delegated click handler for onClickHandler columns on the tbody.
+    // Two modes:
+    //  - exactly one click column  → the whole <tr> is clickable (row-clickable mode)
+    //  - two or more click columns → each retains its own per-cell "link" click target
+    // Either way, the clicked row becomes the "selected" row (left accent border) until
+    // another row is clicked — see this._selectedRow / _renderRows().
+    if (this._singleClickColIdx != null) {
+      document.getElementById(this._id + '_BODY_TBL').addEventListener('click', (e) => {
+        var tr = e.target.closest('tr[data-ftbl-row]');
+        if (!tr) return;
+        var rowIdx = parseInt(tr.dataset.ftblRow, 10);
+        var col = this._columns[this._singleClickColIdx];
+        var rows = this._visible != null ? this._visible.map(i => this._data[i]) : this._data;
+        var row  = rows[rowIdx];
+        if (row == null) return;
+        if (typeof col.clickable === 'function' && col.clickable(row) !== true) return;
+        this._selectedRow = row;
+        this._renderRows();
+        col.onClickHandler(row);
+      });
+    } else if (this._hasClickCol) {
       document.getElementById(this._id + '_BODY_TBL').addEventListener('click', (e) => {
         var td = e.target.closest('td[data-ftbl-click]');
         if (!td) return;
@@ -487,6 +555,8 @@ export class FloriaTable {
         var row  = rows[rowIdx];
         if (row == null) return;
         if (typeof col.clickable === 'function' && col.clickable(row) !== true) return;
+        this._selectedRow = row;
+        this._renderRows();
         col.onClickHandler(row);
       });
     }
@@ -600,7 +670,18 @@ export class FloriaTable {
     var str = '';
     for (var i = 0; i < rows.length; ++i) {
       var row = rows[i];
-      str += this._hasClickCol ? `<tr data-ftbl-row="${i}">` : '<tr>';
+      var rowClickable = false;
+      if (this._singleClickColIdx != null) {
+        var _sc = cols[this._singleClickColIdx];
+        rowClickable = typeof _sc.clickable !== 'function' || _sc.clickable(row) === true;
+      }
+      var rowSelected = this._selectedRow != null && row === this._selectedRow;
+      var trAttrs = this._hasClickCol ? ` data-ftbl-row="${i}"` : '';
+      var trClsParts = [];
+      if (rowClickable) trClsParts.push('ftbl-row-clickable');
+      if (rowSelected)  trClsParts.push('ftbl-row-selected');
+      var trCls = trClsParts.length ? ` class="${trClsParts.join(' ')}"` : '';
+      str += `<tr${trCls}${trAttrs}>`;
       if (this._showRowNumbers)
         str += `<td class="ftbl-rownum" style="text-align:right; padding-right:6px; white-space:nowrap; width:1px; color:#9ca3af; font-size:0.85em;">${i + 1}</td>`;
       for (var j = 0; j < cols.length; ++j) {
@@ -614,12 +695,13 @@ export class FloriaTable {
         var cell    = c._renderer ? c._renderer(row) : _ftEsc(row[c.field] == null ? '' : row[c.field]);
         var content = cell === '' ? _FT_NA : cell;
         var tdCls   = 'ftbl-align-' + c._align + ' ftbl-wrap-' + c._wrap;
+        var titleAttr = typeof c.title === 'function' ? ' title="' + _ftAttrEsc(c.title(row)) + '"' : '';
         var isClickable = typeof c.onClickHandler === 'function'
                        && (typeof c.clickable !== 'function' || c.clickable(row) === true);
         if (isClickable) {
-          str += `<td class="${tdCls}" data-ftbl-click="${j}"${c._widthStyle}><span class="ftbl-link">${content}</span></td>`;
+          str += `<td class="${tdCls}" data-ftbl-click="${j}"${c._widthStyle}${titleAttr}><span class="ftbl-link">${content}</span></td>`;
         } else {
-          str += `<td class="${tdCls}"${c._widthStyle}>${content}</td>`;
+          str += `<td class="${tdCls}"${c._widthStyle}${titleAttr}>${content}</td>`;
         }
       }
       str += '</tr>';
@@ -666,7 +748,8 @@ export class FloriaTable {
       var wrapCls  = 'ftbl-wrap-' + c._wrap;
       if (c.summary) {
         var cell = c._renderer ? c._renderer(totalRow) : _ftEsc(String(totals[c.field]));
-        str += `<td class="${alignCls} ${wrapCls}"${c._widthStyle}>${cell}</td>`;
+        var titleAttr = typeof c.title === 'function' ? ' title="' + _ftAttrEsc(c.title(totalRow)) + '"' : '';
+        str += `<td class="${alignCls} ${wrapCls}"${c._widthStyle}${titleAttr}>${cell}</td>`;
       } else {
         str += `<td class="${alignCls}"${c._widthStyle}></td>`;
       }

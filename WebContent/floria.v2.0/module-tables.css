@@ -183,6 +183,33 @@ th.ftbl-sort-desc .ftbl-sort-icon {
   background: rgba(79, 70, 229, 0.04);
 }
 
+/* Row-clickable mode (exactly one column has an onClickHandler) — the whole row shows a
+   pointer cursor and a slightly stronger hover highlight, since clicking anywhere on the
+   row invokes that column's handler. */
+.ftbl-table tbody tr.ftbl-row-clickable {
+  cursor: pointer;
+}
+.ftbl-table tbody tr.ftbl-row-clickable:hover {
+  background: rgba(79, 70, 229, 0.08);
+}
+
+/* Selected row (the last row whose click-column handler was invoked) — a subtle emerald/teal
+   left accent border, matching the header's accent hue. Managed entirely by re-render: only
+   one row ever carries this class at a time (see this._selectedRow in module-tables.js).
+   Applied to the first cell (not the <tr> itself — box-shadow/border support on table rows is
+   unreliable across browsers under border-collapse:collapse), with padding trimmed to match so
+   the accent doesn't shift row content. */
+.ftbl-table tbody tr.ftbl-row-selected {
+  background: rgba(13, 148, 136, 0.06);
+}
+.ftbl-table tbody tr.ftbl-row-selected:hover {
+  background: rgba(13, 148, 136, 0.10);
+}
+.ftbl-table tbody tr.ftbl-row-selected > td:first-child {
+  border-left: 4px solid #0d9488;
+  padding-left: 8px;
+}
+
 .ftbl-table tbody td {
   padding: 9px 12px;
   vertical-align: top;
