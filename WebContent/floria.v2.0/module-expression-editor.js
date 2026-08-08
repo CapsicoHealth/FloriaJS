@@ -21,7 +21,9 @@ import { FloriaText                                           } from "./module-t
 import { FloriaTabs, FloriaTooltipDialog, FloriaAlertSimple   } from "./module-dialog.js";
 import { FloriaFactories                                      } from "./module-factories.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-editor.css", import.meta.url).href);
+const DT_LOAD = window._STARTUP_DATE_MS || new Date().getTime();
+
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-editor.css?ts="+DT_LOAD, import.meta.url).href);
 
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FloriaExpressionEditor
@@ -40,6 +42,10 @@ FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-expression-
 //   . each subsequent item supplies "op" combining its own value with the running accumulated result
 //   . an item's value comes from either "expr" (a leaf test) or "sub" (a nested array, evaluated with
 //     this same fold rule, then treated as one grouped/parenthesized value)
+//   . "expr" and "sub" are MUTUALLY EXCLUSIVE — an item is a leaf or a group, never both. "expr" is the
+//     discriminator: an item carrying an "expr" is a leaf, no matter what else it carries. See the
+//     _isLeaf/_isGroup helpers below for why the test is written that way round (it makes the shape
+//     survive a round-trip through a backend that eagerly emits an empty "sub": [] on every item).
 //   . "not":true on an item negates that item's own value (leaf or whole nested group)
 //
 // Constructor config:
@@ -173,6 +179,44 @@ function _compactJson(jsonStr)
    return _compactLeafObjects(_compactScalarArrays(jsonStr));
  }
 
+// ── Item classification: LEAF vs GROUP ───────────────────────────────────────────────────────────────
+//
+// Every item in the tree is either a LEAF (carries "expr": {var,f,vals}) or a GROUP (carries "sub":
+// [ ...items... ]) — never both. These two helpers are the SINGLE place that decision is made, so every
+// consumer (evaluation, pretty-printing, rendering, validation, description lookups, ...) agrees.
+//
+// Why not just test "item.sub != null" (which is what every call site used to do inline)? Because that
+// makes the classification depend on a field being ABSENT, and "absent" is exactly what a round-trip
+// through a backend cannot be relied upon to preserve. Concretely: a server-side binding that maps this
+// shape onto a class whose sub-list field is eagerly initialized (e.g. Java/Gson with
+// "List<Rule> sub = new ArrayList<>()") will happily serialize a perfectly ordinary LEAF back out as
+// {"expr": {...}, "sub": []} — at which point a bare "sub != null" test silently reclassifies that leaf
+// as an empty group and the condition vanishes from the UI. Testing "expr" FIRST (a field that is only
+// ever present on a genuine leaf) makes the classification robust against that, and the extra
+// length-0 guard below keeps a stray empty "sub" from being treated as meaningful content.
+//
+// NOTE the deliberate asymmetry in _isGroup: it accepts an EMPTY "sub" array as a group. That's not an
+// oversight — _addItem() creates a brand-new group as exactly { sub: [] }, and it must render (so the
+// user can then add conditions into it) during the window before its first child exists. So "empty"
+// only disqualifies a "sub" when there's also an "expr" to fall back to, which _isLeaf already covers.
+function _isLeaf(item)
+ {
+   return item != null && item.expr != null;
+ }
+
+function _isGroup(item)
+ {
+   return item != null && item.expr == null && Array.isArray(item.sub);
+ }
+
+// True only for a group that actually HAS children — i.e. the cases where recursing into ".sub" can
+// possibly produce anything. Used by the pure "walk the tree and collect/analyze" helpers, which have
+// nothing to do on an empty group and would otherwise just recurse into an empty array.
+function _hasSubItems(item)
+ {
+   return _isGroup(item) === true && item.sub.length > 0;
+ }
+
 // path semantics: an array of indices, e.g. [2,1] means tree[2].sub[1]. Each successive index after the
 // first is reached by walking through the PREVIOUS item's ".sub" array.
 function _resolveContainer(root, path)
@@ -203,7 +247,7 @@ function _normalizeList(list)
        delete item.op;
       else if (item.op !== 'and' && item.op !== 'or')
        item.op = 'and';
-      if (item.sub != null)
+      if (_hasSubItems(item) === true)
        _normalizeList(item.sub);
     }
  }
@@ -223,13 +267,13 @@ function _collectAtoms(list, atomMap)
    for (var i = 0; i < list.length; ++i)
     {
       var item = list[i];
-      if (item.expr != null)
+      if (_isLeaf(item) === true)
        {
          var key = _atomKeyOf(item.expr);
          if (atomMap.has(key) === false)
           atomMap.set(key, { index: atomMap.size, expr: item.expr });
        }
-      else if (item.sub != null)
+      else if (_hasSubItems(item) === true)
        _collectAtoms(item.sub, atomMap);
     }
  }
@@ -250,7 +294,7 @@ function _evalList(list, assign, atomMap)
 
 function _evalItem(item, assign, atomMap)
  {
-   var v = item.expr != null ? assign[atomMap.get(_atomKeyOf(item.expr)).index] : _evalList(item.sub, assign, atomMap);
+   var v = _isLeaf(item) === true ? assign[atomMap.get(_atomKeyOf(item.expr)).index] : _evalList(item.sub, assign, atomMap);
    return item.not === true ? !v : v;
  }
 
@@ -267,14 +311,14 @@ function _findConflictingAtomHints(tree)
        for (var i = 0; i < list.length; ++i)
         {
           var item = list[i];
-          if (item.expr != null)
+          if (_isLeaf(item) === true)
            {
              var key = _atomKeyOf(item.expr);
              var rec = seen.get(key) || { plain: false, negated: false, expr: item.expr };
              if (item.not === true) rec.negated = true; else rec.plain = true;
              seen.set(key, rec);
            }
-          else if (item.sub != null)
+          else if (_hasSubItems(item) === true)
            walk(item.sub);
         }
      })(tree);
@@ -436,7 +480,7 @@ function _ppItem(item, prefix, padWidth, depth, vars, functions, mode, dict)
    var indent = _indentStr(depth, mode);
    var pad = _padStr(padWidth - prefix.length, mode);
    var kw = prefix === '' ? '' : _ppTok(mode, 'kw', _esc(prefix.trim())) + (mode === 'rich' ? '&nbsp;' : ' ');
-   if (item.sub != null)
+   if (_isGroup(item) === true)
     {
       var open  = _ppTok(mode, 'punc', '(');
       var close = _ppTok(mode, 'punc', ')');
@@ -638,9 +682,42 @@ export class FloriaExpressionEditor
       if (this._funcs.length === 0)
        console.error("FloriaExpressionEditor('"+divId+"'): no 'functions' configured — the function dropdown will be empty.");
 
-      this._builderPanelId = null;
-      this._builderBound   = false;
-    }
+       this._builderPanelId = null;
+       this._builderBound   = false;
+       // The "?" help icon's FloriaTooltipDialog — see _renderBuilder()/destroy() below for why
+       // this must be tracked and explicitly torn down rather than left to leak.
+       this._helpTooltip    = null;
+       this._helpDocClickHandler = null; // see _renderBuilder()'s "Click-outside-to-close" block
+     }
+
+    /**
+     * Tears down this instance's own help-icon FloriaTooltipDialog (and its underlying Popper
+     * instance). MUST be called by any caller that discards/replaces a FloriaExpressionEditor
+     * instance (e.g. before re-creating one into the same host div, or when the dialog/page
+     * hosting it is closed) — otherwise the tooltip's content <div>, which module-dialog.js's
+     * FloriaTooltipDialog appends directly to document.body (a "portal", entirely outside this
+     * editor's own host div/any enclosing FloriaDialog's DOM subtree), is never removed, and can
+     * be left orphaned and visible (at its last on-screen position, over whatever page happens to
+     * be underneath) if it happened to still be open when the host was torn down. See
+     * _renderBuilder() below for how a fresh tooltip instance is (re)created on every re-render.
+     */
+    destroy()
+     {
+       if (this._helpTooltip != null)
+        {
+          this._helpTooltip.destroy();
+          this._helpTooltip = null;
+        }
+       // See _renderBuilder()'s "Click-outside-to-close" block below for where this is bound — a
+       // plain document-level listener would otherwise retain this WHOLE (now-destroyed) instance
+       // forever (it closes over `this`), even though it degrades to a harmless no-op once
+       // _helpTooltip is null above.
+       if (this._helpDocClickHandler != null)
+        {
+          document.removeEventListener('click', this._helpDocClickHandler, true);
+          this._helpDocClickHandler = null;
+        }
+     }
 
    // ── Public API ─────────────────────────────────────────────────────────
 
@@ -722,7 +799,7 @@ export class FloriaExpressionEditor
            {
              var item = list[i];
              var label = pathLabel+'['+i+']';
-             if (item.expr != null)
+             if (_isLeaf(item) === true)
               {
                 if (varNames.indexOf(item.expr.var) === -1)
                  errors.push(label+": unknown variable '"+item.expr.var+"'");
@@ -731,8 +808,15 @@ export class FloriaExpressionEditor
                 if (!Array.isArray(item.expr.vals) || item.expr.vals.length === 0)
                  errors.push(label+": no values provided");
               }
-             else if (item.sub != null)
-              walk(item.sub, label+'.sub');
+             else if (_isGroup(item) === true)
+              {
+                // An empty group asserts nothing and would silently evaluate to "true" (see _evalList),
+                // so surface it here rather than letting it quietly weaken the whole expression. Note
+                // this is reported but still walked-into (a no-op), keeping the traversal uniform.
+                if (item.sub.length === 0)
+                 errors.push(label+": group is empty");
+                walk(item.sub, label+'.sub');
+              }
              else
               errors.push(label+": item has neither 'expr' nor 'sub'");
            }
@@ -879,21 +963,90 @@ export class FloriaExpressionEditor
       // _mountPendingPickers().
       this._pendingPickers = [];
 
-      var helpId = panelId+'_FEE_HELP';
-      var str = '<div class="fee-toolbar">'
-              +   '<span id="'+helpId+'" class="fee-help-icon">?</span>'
-              + '</div>'
-              + (this._tree.length === 0 && this._readOnly !== true ? this._renderIntroBlurb() : '')
-              + this._renderAddButtons([])
-              + this._renderList(this._tree, [])
-              + '<BR><BR><BR>'
-              ;
+       // The "?" help icon and the root's own "+ Condition"/"+ Group" buttons are merged onto ONE
+       // flex row (.fee-toolbar-row) — rather than the help icon sitting alone on its own line
+       // above them (see .fee-toolbar-row in module-expression-editor.css) — to reclaim a full
+       // line of vertical space that's otherwise paid on every single expression, however short.
+       // This ONLY applies to the root: a nested group's own add-buttons row (rendered via
+       // _renderAddButtons(path) from _renderItem()'s groupActions, below) has no help icon of its
+       // own and is unaffected.
+       var helpId = panelId+'_FEE_HELP';
+       var str = (this._tree.length === 0 && this._readOnly !== true ? this._renderIntroBlurb() : '')
+               + '<div class="fee-toolbar-row">'
+               +   this._renderAddButtons([])
+               +   '<span id="'+helpId+'" class="fee-help-icon">?</span>'
+               + '</div>'
+               + this._renderList(this._tree, [])
+               + '<BR><BR><BR>'
+               ;
               
       panel.innerHTML = str;
 
       this._mountPendingPickers();
 
-      new FloriaTooltipDialog(helpId, '<div class="fee-help-body">'+this._introBlurbContent()+'</div>');
+      // _renderBuilder() re-runs on EVERY mutation (see _afterMutate()), rebuilding this panel's
+      // entire innerHTML — including a brand-new "?" icon <span> each time, sharing the same
+      // (panelId-derived, hence stable) elementId as the previous one but a DIFFERENT actual DOM
+      // node. Re-using module-dialog.js's FloriaTooltipDialog constructor as-is on every re-render
+      // would leak a fresh Popper instance every single time (all of them fighting over the same
+      // shared, document.body-level tooltip <div> — see FloriaTooltipDialog's constructor) — so
+      // the previous instance is explicitly destroyed first, keeping exactly one alive at a time,
+      // correctly anchored to the CURRENT icon node. See destroy() above for the other half of
+      // this contract: whoever discards this WHOLE editor instance must call it too.
+      //
+      // arrow=true + manual=true + the dedicated "feeHelpTooltip" card class mirror FloriaTabs' own
+      // helpUrl popover (module-dialog.js's _showHelp()) — a proper rounded/shadowed card with its
+      // own "×" close button and click-outside-to-dismiss, rather than the bare, arrow-less
+      // click-toggle popup this used to fall back to by omitting all of FloriaTooltipDialog's
+      // optional args. manual=true disables FloriaTooltipDialog's own built-in click-to-toggle
+      // handler on the icon (see its constructor) — that toggle, and the click-outside-to-close
+      // behavior, are instead driven explicitly below.
+      if (this._helpTooltip != null)
+       this._helpTooltip.destroy();
+      this._helpTooltip = new FloriaTooltipDialog(helpId, '', true, true, 'feeHelpTooltip');
+      this._helpTooltip.setContents(
+          '<div class="fee-help-popover">'
+        +   '<span class="fee-help-close" title="Close">&times;</span>'
+        +   '<div class="fee-help-body">'+this._introBlurbContent()+'</div>'
+        + '</div>'
+        + '<div class="popperArrow" data-popper-arrow></div>');
+      var closeEl = this._helpTooltip.getTooltipDiv().querySelector('.fee-help-close');
+      if (closeEl != null)
+       closeEl.onclick = (e) => { e.preventDefault(); e.stopPropagation(); this._helpTooltip.hide(); };
+
+      var iconEl = document.getElementById(helpId);
+      if (iconEl != null)
+       iconEl.onclick = (e) =>
+        {
+          e.preventDefault();
+          if (this._helpTooltip.getTooltipDiv().hasAttribute('show-popper'))
+           this._helpTooltip.hide();
+          else
+           this._helpTooltip.show();
+        };
+
+      // Click-outside-to-close, bound ONCE for the life of this editor instance (not re-bound on
+      // every re-render, unlike the icon's own onclick above — this would otherwise stack up one
+      // extra document-level listener per mutation, forever). Always re-reads the CURRENT
+      // this._helpTooltip/helpId (both stable/live via closure), so it stays correct across every
+      // destroy()+recreate cycle above. The handler itself is stashed on the instance so destroy()
+      // (above) can remove it — otherwise this document-level listener would keep the whole
+      // instance alive forever, even past destroy().
+      if (this._helpDocClickHandler == null)
+       {
+         this._helpDocClickHandler = (ev) =>
+          {
+            var tt = this._helpTooltip?.getTooltipDiv();
+            if (tt == null || tt.hasAttribute('show-popper') === false)
+             return;
+            var icon = document.getElementById(helpId);
+            if (tt.contains(ev.target) || icon === ev.target || (icon != null && icon.contains(ev.target)))
+             return;
+            this._helpTooltip.hide();
+          };
+         document.addEventListener('click', this._helpDocClickHandler, true);
+       }
+
 
       if (this._builderBound === true)
        return;
@@ -1015,7 +1168,7 @@ export class FloriaExpressionEditor
                     + '</span>';
 
       var bodyHtml;
-      if (item.sub != null)
+      if (_isGroup(item) === true)
        {
          var groupActions = this._renderAddButtons(path);
          bodyHtml = '<div class="fee-group">'+groupActions+this._renderList(item.sub, path)+'</div>';
@@ -1155,7 +1308,7 @@ export class FloriaExpressionEditor
            {
              var delPath = JSON.parse(btn.dataset.itemPath);
              var delLoc  = _resolveItem(that._tree, delPath);
-             var kind = delLoc.item.sub != null ? 'group' : 'condition';
+             var kind = _isGroup(delLoc.item) === true ? 'group' : 'condition';
              // Deleting the only remaining item of a NESTED group's own "sub" list cascades into
              // deleting that group itself (see _deleteItem) — flag this up front rather than
              // leaving the user surprised by an entire group disappearing.
@@ -1259,7 +1412,7 @@ export class FloriaExpressionEditor
           for (var i = 0; i < list.length; ++i)
            {
              var item = list[i];
-             if (item.expr != null)
+             if (_isLeaf(item) === true)
               {
                 var v = item.expr.var;
                 var vals = Array.isArray(item.expr.vals) ? item.expr.vals : [];
@@ -1274,7 +1427,7 @@ export class FloriaExpressionEditor
                     }
                  }
               }
-             else if (item.sub != null)
+             else if (_hasSubItems(item) === true)
               walk(item.sub);
            }
         })(this._tree);

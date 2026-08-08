@@ -114,6 +114,8 @@ export class TreeView {
     const durations = [];
     
     const collectDurations = (conversation) => {
+      if (conversation == null)
+       return;
       if (conversation.usage && conversation.usage.total_tokens) {
         durations.push(conversation.usage.total_tokens);
       }

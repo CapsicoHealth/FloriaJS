@@ -51,13 +51,25 @@
   box-sizing: border-box;
 }
 
-/* ── Toolbar (help icon etc.) ─────────────────────────────────────────── */
-.fee-toolbar {
+/* ── Toolbar (help icon) + root add-buttons, merged onto one row ─────────
+   The "?" help icon used to sit alone on its own ".fee-toolbar" row, ABOVE a separate
+   ".fee-add-buttons" row — two stacked flex rows costing a full line of height on every single
+   expression, however short. module-expression-editor.js now emits BOTH on one shared row
+   (".fee-toolbar-row"), the add-buttons flush left and the help icon pushed flush right via
+   margin-left:auto. Only the ROOT's add-buttons participate in this merged row (see
+   _renderBuilder()) — a nested group's own add-buttons (rendered separately by
+   _renderItem()'s groupActions) has no help icon and is intentionally unaffected, so it keeps
+   using plain ".fee-add-buttons" styling (margin-bottom included) on its own. */
+.fee-toolbar-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
   margin-bottom: 8px;
+}
+/* Suppress the standalone add-buttons row's own bottom margin when it's nested inside this
+   merged toolbar row — the row itself already carries that margin. */
+.fee-toolbar-row .fee-add-buttons {
+  margin-bottom: 0;
 }
 
 .fee-help-icon {
@@ -74,29 +86,68 @@
   font-weight: 700;
   flex-shrink: 0;
   background: #ede9fe;
+  /* Pinned flush right via the flex row (margin-left:auto) with a deliberate buffer on its own
+     right edge: the scrolling ancestor (module-dialog.css's ".tabContainer .tabBody > DIV",
+     overflow:auto) carves a scrollbar track (~15-17px) out of this SAME right edge only once the
+     panel's content is tall enough to need one — with zero buffer the icon then renders right
+     underneath/behind that track. This margin reserves room for a typical scrollbar whether or
+     not one happens to be rendered right now (harmless extra gap when there isn't one). */
+  margin-left: auto;
+  margin-right: 1em;
 }
 
-.fee-help-body { 
+
+.fee-help-body {
   max-width: 320px;
   font-size: 0.9em;
   line-height: 1.25;
-  background: #F0F0F0;
-  padding: 1em;
+  padding: 1.4em 1.6em;
 }
 .fee-help-body b { color: #4f46e5; }
 
+/* The "?" help icon's popover — a proper rounded/shadowed "card" (mirroring FloriaTabs' own
+   helpUrl popover, ".popperTooltip.tabHelpTooltip" in module-dialog.css) with its own "×" close
+   button, rather than a bare flat-background tooltip. See module-expression-editor.js's
+   _renderBuilder() for how this is wired up (arrow=true, manual=true, click-outside-to-close). */
+.popperTooltip.feeHelpTooltip {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06);
+  padding: 0;
+}
+.fee-help-popover {
+  position: relative;
+}
+.fee-help-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 20px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.fee-help-close:hover {
+  color: #333;
+}
+
 /* ── Builder: rows / groups ───────────────────────────────────────────── */
+/* Vertical density: .fee-list's inter-row gap and .fee-row's own gap/padding used to compound to
+   more dead space than needed between successive condition rows — trimmed here so a multi-
+   condition expression needs noticeably less scrolling to review, without touching anything's
+   horizontal sizing. */
 .fee-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .fee-row {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 6px 8px;
+  gap: 3px;
+  padding: 3px 8px;
   border-left: 2px solid transparent;
 }
 
@@ -135,12 +186,32 @@
    (_ruleToggleInfo/.cjb-switch), just with expression-oriented language
    ("Matching this expression" / "Not matching this expression") instead of
    the patient-specific "Inclusion Rule"/"Exclusion Rule" copy. */
-.fee-not-toggle-wrap {
+/* Scoped as ".fee-root .fee-not-toggle-wrap" (two classes, specificity (0,2,0)) rather than the
+   bare ".fee-not-toggle-wrap" (0,1,0) — this element is a real <label> (see
+   module-expression-editor.js's _renderItem), and host apps commonly style bare "label"
+   descendants of their own form containers (e.g. agentic-testing.css's ".at-form-col label",
+   specificity (0,1,1) — display:block/padding-top/font-weight, meant for actual field labels).
+   A single-class selector here would lose that specificity fight depending on which stylesheet
+   happens to load second, silently reverting this to a block box and breaking the whole
+   inline-flex layout (which is exactly what caused the "Matching"/AND-OR misalignment bug).
+   Two classes reliably wins regardless of load order, and padding-top/font-weight are reset
+   explicitly since the leaking rule sets those too. */
+.fee-root .fee-not-toggle-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
   cursor: pointer;
+  padding-top: 0;
+  font-weight: normal;
+  /* Alignment against the AND/OR .fee-op-toggle sitting beside it in the same
+     (align-items:center) .fee-row-head: flexbox's align-items:center centers each item's own
+     BOX within the row, so as long as this wrap's box is the SAME height as .fee-op-toggle's
+     box, they end up visually centered against each other automatically — no eyeballed pixel
+     offset needed. .fee-op-toggle's rendered height is border(1px*2) + .fee-op-btn's padding
+     (3px*2) + its ~0.85em line box (~16px), i.e. ~24px; min-height below matches that so this
+     wrap's (shorter, 18px-tall switch + label) content is centered within an equally-tall box. */
+  min-height: 24px;
 }
 .fee-not-toggle-wrap.fee-not-readonly { cursor: default; }
 
@@ -254,7 +325,7 @@
 }
 
 .fee-select {
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 0.9em;
   border: 1px solid #e1e4e8;
   border-radius: 6px;

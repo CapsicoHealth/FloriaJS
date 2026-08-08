@@ -17,6 +17,12 @@
 "use strict";
 
 import { FloriaPromptDialog } from "./module-dialog.js";
+import { FloriaDOM } from "./module-dom.js";
+
+const DT_LOAD = window._STARTUP_DATE_MS || new Date().getTime();
+
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-content-explorer.css?ts="+DT_LOAD, import.meta.url).href);
+
 
 /**
  * ContentExplorer — reusable two-level file-explorer-style component.
