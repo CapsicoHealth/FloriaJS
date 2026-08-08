@@ -23,24 +23,34 @@
 import { FloriaDOM } from "./module-dom.js";
 import { FloriaText } from "./module-text.js";
 
+const DT_LOAD = window._STARTUP_DATE_MS || new Date().getTime();
+
+// Consolidated with module-forms2.js (both self-inject the same stylesheet; injectCSSLink()
+// is idempotent - a <link> for a given href is only ever added once - so standalone usage of
+// these controls, without module-forms2.js ever being imported, still gets styled).
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-forms2.css?ts="+DT_LOAD, import.meta.url).href);
+
   
-function defaultEdgeFunc()
- {
-   return "";
- }
-
-
+// NOTE on the Grid vs Legacy split below (Radio.gen/Checkbox.gen): tableEdgeFunc() no longer builds
+// <TABLE>-based wrapping markup. It now returns a lightweight, tagged marker function - Radio.gen/
+// Checkbox.gen detect the tag (_isFloriaTableEdgeFunc) and, when present (or when edgeFunc is simply
+// null), render options into a responsive CSS Grid (see ".controlGrid" in module-forms2.css) instead of
+// invoking the function at all. This keeps the Radio.gen/Checkbox.gen/TableEdgeFunc call signatures 100%
+// unchanged (no caller anywhere - module-forms2.js or any other consuming app - needs to change), while
+// still letting Radio.gen/Checkbox.gen fall back to the ORIGINAL callback-driven table-rendering loop
+// (kept below, byte-for-byte capable) for any genuine hand-rolled edgeFunc that ISN'T a TableEdgeFunc
+// result - e.g. module-forms2.js's matrix/"questions" mode, which deliberately keeps using a raw <TD>-
+// per-cell callback of its own and is unaffected by this change.
 function tableEdgeFunc(columnsCount, classNames)
  { 
     if (classNames == null)
      classNames = "";
-    if (columnsCount == null)
-     columnsCount = 4;
-    var width=Math.floor(100/columnsCount)+"%";
-    return function(i, before, count, tdExtras, doWrap)
+    var effectiveColumnsCount = columnsCount == null ? 4 : columnsCount;
+    var width=Math.floor(100/effectiveColumnsCount)+"%";
+    var fn = function(i, before, count, tdExtras, doWrap)
      {
         if (doWrap == true)
-         return columnsCount - i%columnsCount;
+         return effectiveColumnsCount - i%effectiveColumnsCount;
         if (tdExtras == null)
          tdExtras = "";
         if (i == null && before == null) // This is a forced break
@@ -48,12 +58,12 @@ function tableEdgeFunc(columnsCount, classNames)
 
         if (before == true)
          return i == 0                    ? '<TABLE align="left" border="0px" cellpadding="0px" cellspacing="0px" width="98%" class="'+classNames+'"><TR><TD width="'+width+'" '+tdExtras+'>' 
-              : i!=0 && i%columnsCount==0 ? '<TR valign="top"><TD width="'+width+'" '+tdExtras+'>'
+              : i!=0 && i%effectiveColumnsCount==0 ? '<TR valign="top"><TD width="'+width+'" '+tdExtras+'>'
                                           : '<TD width="'+width+'" '+tdExtras+'>' ;
         else if (i == count-1)
           {
             var Str = '</TD>';
-            while (i % columnsCount != columnsCount-1)
+            while (i % effectiveColumnsCount != effectiveColumnsCount-1)
               {
                 Str+='<TD width="'+width+'">&nbsp;</TD>';
                 ++i;
@@ -61,8 +71,16 @@ function tableEdgeFunc(columnsCount, classNames)
             return Str+'</TR></TABLE>\n';
           }
         else
-         return i % columnsCount == columnsCount-1 ? '</TD></TR>' : '</TD>';
+         return i % effectiveColumnsCount == effectiveColumnsCount-1 ? '</TD></TR>' : '</TD>';
       };
+    // Tag: read by Radio.gen/Checkbox.gen to opt into the new CSS Grid layout instead of calling fn().
+    // columnsCount (untouched, possibly null) is preserved as-is so "=== 1" reliably means "force a
+    // single stacked column"; any other value (including the default of 4 above) means "responsive,
+    // content-sized auto-fit grid" - see ".controlGrid"/".controlGrid.singleColumn" in module-forms2.css.
+    fn._isFloriaTableEdgeFunc = true;
+    fn._floriaColumnsCount = columnsCount;
+    fn._floriaClassNames = classNames;
+    return fn;
 };
 
 function makeRelIds(elementId)
@@ -72,6 +90,229 @@ function makeRelIds(elementId)
    if (isArray == true)
     elementId = elementId[1];
    return {formId: formId, elementId: elementId, fullId: formId+'_'+elementId};
+ }
+
+// ".controlGrid" lays each field's options out in a responsive CSS Grid whose columns are sized to the
+// content that actually lands in them - so a row can legitimately be "one wide column + two narrow ones"
+// rather than three equally-wide ones. That combination (responsive count + per-column content sizing)
+// can't be expressed in CSS alone, hence the JS pass below. The CSS-only fallback in module-forms2.css
+// (repeat(auto-fit, minmax(...))) is what applies before/without this pass, and it necessarily produces
+// EQUAL tracks: auto-fit needs one definite minimum to divide the available width by, and that single
+// minimum has to accommodate the field's WIDEST label. That's needlessly pessimistic - e.g. two options
+// measuring 260px and 180px in a 505px container "don't fit" as equal tracks (2 x 260 + 14 = 534) even
+// though they trivially fit as content-sized ones (260 + 180 + 14 = 454). So this pass measures every
+// option individually, picks the largest column count whose per-column content widths actually fit, and
+// pins an explicit "repeat(N, max-content)" template.
+//
+// Note the options are (and must stay) "white-space:nowrap" - a radio/checkbox label is a single atomic
+// choice and must never break across lines - so a label that genuinely can't share the width with a
+// neighbour correctly drops the field to fewer columns rather than wrapping.
+//
+// CRITICAL - why this is a DEFERRED, post-insertion pass rather than computed inside Radio.gen/
+// Checkbox.gen: the option styling is almost entirely font-relative ("width:1em" indicator, "gap:0.35em",
+// plus the label text itself), and FloriaForms fields typically sit several levels deep inside nested
+// tables/panels that inherit a SMALLER font-size than <body>. Measuring anywhere other than the option's
+// true final position skews every result by a constant factor (empirically ~1.23x against <body>), which
+// is silently enough to cost a column per field. And measuring at generation time is impossible anyway:
+// module-forms2.js (like most callers) invokes gen() with ContainerId === null, i.e. it wants the markup
+// returned as a STRING and inserts it later - so at gen() time the destination element, and therefore
+// the real font context AND the available width, do not exist yet. Hence: emit the grid unsized, then
+// measure it in place (rAF-debounced, plus a MutationObserver for later-inserted grids, plus a
+// ResizeObserver per grid so container/zoom/visibility changes re-run it).
+var _controlGridSizingPending = false;
+var _controlGridObserver = null;
+var _controlGridResizeObserver = null;
+var _controlGridResizeHooked = false;
+var _controlGridResizeTimer = null;
+
+// Natural (max-content) width of every option in the grid, in DOM order, with nulls marking the
+// full-row ".controlGridBreak" separators. Measured via a throwaway probe that is absolutely positioned
+// INSIDE the grid itself, which (a) takes it out of grid flow so it can't disturb layout or create a
+// phantom track, and (b) inherits the grid's exact font context. We can't just read the existing
+// children's offsetWidth: they're grid items, so they've already been stretched to their track's width.
+function measureControlGridItems(grid)
+ {
+   var items = [];
+   var probe = document.createElement("DIV");
+   probe.style.cssText = "position:absolute; visibility:hidden; pointer-events:none; top:-9999px; left:-9999px; width:auto; white-space:nowrap;";
+   for (var i = 0; i < grid.children.length; ++i)
+    {
+      var c = grid.children[i];
+      if (c.className != null && c.className.indexOf("controlGridBreak") != -1)
+       {
+         items.push(null);
+         continue;
+       }
+      if (c.tagName != "A")
+       continue;
+      // Built via DOM APIs (not an HTML string) so arbitrary label text needs no escaping. Normalize to
+      // the "_OFF" (normal-weight) variant so a currently-selected/greyed option doesn't skew the
+      // measurement, and use textContent so the nested hidden <INPUT> (and its id) isn't cloned.
+      var a = document.createElement("A");
+      a.className = c.className.split("_")[0] + "_OFF";
+      a.textContent = c.textContent;
+      probe.appendChild(a);
+      items.push({w: 0});
+    }
+   if (probe.children.length == 0)
+    return items;
+   grid.appendChild(probe);
+   var n = 0;
+   for (var i = 0; i < items.length; ++i)
+    if (items[i] != null)
+     items[i].w = probe.children[n++].offsetWidth;
+   grid.removeChild(probe);
+   return items;
+ }
+
+// Total width this option list would need laid out in exactly columnCount columns, given that grid
+// auto-placement fills row-major and each track ends up as wide as the widest option that lands in it.
+// A null entry (".controlGridBreak") spans the full row, so whatever follows restarts at column 0.
+function controlGridWidthFor(items, columnCount, gapPx)
+ {
+   var cols = [];
+   for (var i = 0; i < columnCount; ++i)
+    cols.push(0);
+   var col = 0;
+   for (var i = 0; i < items.length; ++i)
+    {
+      if (items[i] == null)
+       { col = 0; continue; }
+      if (items[i].w > cols[col])
+       cols[col] = items[i].w;
+      col = (col + 1) % columnCount;
+    }
+   var total = gapPx * (columnCount - 1);
+   for (var i = 0; i < cols.length; ++i)
+    total += cols[i];
+   return total;
+ }
+
+function sizeControlGrid(grid)
+ {
+   if (grid == null)
+    return;
+   if (grid.className.indexOf("singleColumn") != -1) // 1 column by definition - nothing to compute.
+    {
+      grid.setAttribute("data-floria-col-sized", "1");
+      return;
+    }
+   var availPx = grid.clientWidth;
+   if (availPx <= 0) // not laid out yet (hidden tab/panel, detached...): leave it for a later pass.
+    return;
+   // Re-measure only when the available width actually changed (the attribute doubles as both the
+   // "already sized" marker and the width it was sized against).
+   if (grid.getAttribute("data-floria-col-sized") == ""+availPx)
+    return;
+
+   var items = measureControlGridItems(grid);
+   var optionCount = 0;
+   for (var i = 0; i < items.length; ++i)
+    if (items[i] != null)
+     ++optionCount;
+   if (optionCount == 0)
+    {
+      grid.setAttribute("data-floria-col-sized", ""+availPx);
+      return;
+    }
+
+   var gapPx = parseFloat(getComputedStyle(grid).columnGap);
+   if (isNaN(gapPx) == true)
+    gapPx = 0;
+
+   // Largest column count that genuinely fits, content-sized. Falls back to 1, which may overflow if a
+   // single label is wider than the whole container - unavoidable without wrapping, and no worse than
+   // any other choice at that point.
+   var best = 1;
+   for (var n = optionCount; n >= 2; --n)
+    if (controlGridWidthFor(items, n, gapPx) <= availPx)
+     { best = n; break; }
+
+   // "max-content" tracks: each column is exactly as wide as its own widest option, independent of its
+   // neighbours - which is the whole point of computing the count here rather than using auto-fit.
+   grid.style.gridTemplateColumns = "repeat("+best+", max-content)";
+   grid.setAttribute("data-floria-col-sized", ""+availPx);
+ }
+
+function sizeAllControlGrids()
+ {
+   if (typeof document === "undefined")
+    return;
+   var grids = document.querySelectorAll(".controlGrid");
+   for (var i = 0; i < grids.length; ++i)
+    {
+      sizeControlGrid(grids[i]);
+      // Per-grid width watching covers everything a global resize listener can't see on its own:
+      // becoming visible (tab/panel switch), an ancestor changing width, zoom, etc.
+      if (_controlGridResizeObserver != null)
+       _controlGridResizeObserver.observe(grids[i]);
+    }
+ }
+
+// The chosen column count is derived from measured px, so it goes stale whenever the rendered size of an
+// option changes - notably on browser zoom, which shifts the CSS-pixel viewport and can cross the host
+// app's media-query breakpoints and restyle font-size/padding. Nothing in CSS can re-run a JS
+// measurement, so drop the markers and re-measure everything.
+function resizeAllControlGrids()
+ {
+   if (typeof document === "undefined")
+    return;
+   var grids = document.querySelectorAll(".controlGrid[data-floria-col-sized]");
+   for (var i = 0; i < grids.length; ++i)
+    grids[i].removeAttribute("data-floria-col-sized");
+   sizeAllControlGrids();
+ }
+
+function scheduleControlGridSizing()
+ {
+   if (typeof document === "undefined" || _controlGridSizingPending == true)
+    return;
+   _controlGridSizingPending = true;
+   var run = function()
+    {
+      _controlGridSizingPending = false;
+      sizeAllControlGrids();
+    };
+   if (typeof requestAnimationFrame !== "undefined")
+    requestAnimationFrame(run);
+   else
+    setTimeout(run, 0);
+
+   if (_controlGridResizeObserver == null && typeof ResizeObserver !== "undefined")
+    _controlGridResizeObserver = new ResizeObserver(function(entries)
+     {
+       // sizeControlGrid() no-ops unless the width really changed, so this can't feed back on itself
+       // (setting grid-template-columns doesn't alter the grid's own outer width - it's a block box).
+       for (var i = 0; i < entries.length; ++i)
+        sizeControlGrid(entries[i].target);
+     });
+
+   // Callers that build markup as a string may insert it well after this frame (and repeatedly, e.g.
+   // paging/tab switching in FloriaForms), so watch for any later-inserted grids too. Cheap: the
+   // observer only ever schedules the same rAF-debounced pass, which no-ops when nothing is unsized.
+   if (_controlGridObserver == null && typeof MutationObserver !== "undefined" && document.body != null)
+    {
+      _controlGridObserver = new MutationObserver(function()
+       {
+         if (document.querySelector(".controlGrid:not([data-floria-col-sized])") != null)
+          scheduleControlGridSizing();
+       });
+      _controlGridObserver.observe(document.body, {childList: true, subtree: true});
+    }
+   if (_controlGridResizeHooked == false && typeof window !== "undefined")
+    {
+      _controlGridResizeHooked = true;
+      window.addEventListener("resize", function()
+       {
+         if (_controlGridResizeTimer != null)
+          clearTimeout(_controlGridResizeTimer);
+         _controlGridResizeTimer = setTimeout(function()
+          {
+            _controlGridResizeTimer = null;
+            resizeAllControlGrids();
+          }, 150);
+       });
+    }
  }
 
 var Radio = {
@@ -84,8 +325,11 @@ var Radio = {
     },
   gen : function(ContainerId, elementId, Values, edgeFunc, onChange, Default, Mode, noLabels, readOnly)
     {
-      if (edgeFunc == null)
-       edgeFunc = defaultEdgeFunc;
+      // A genuine custom callback (not one produced by FloriaControls.TableEdgeFunc()) is rendered via
+      // the original callback-driven loop below, unchanged - this is what module-forms2.js's matrix/
+      // "questions" mode relies on. Everything else (edgeFunc null, or a TableEdgeFunc(...) result) uses
+      // the new ".controlGrid" CSS Grid layout instead.
+      var isLegacyEdgeFunc = edgeFunc != null && edgeFunc._isFloriaTableEdgeFunc != true;
       if (Default != null && Default.indexOfSE != null)
         Default = Default.length == 0 ? null : Default[0];
       var Ids = makeRelIds(elementId);
@@ -95,34 +339,68 @@ var Radio = {
       Str += ' type="hidden">';
       if (readOnly != true)
        {
-         var totalValidElements = 0;
-         for (var i = 0; i < Values.length; ++i)
-          if (Values[i] != null)
-           ++totalValidElements;
-         var counter = 0;
-         var cells = 0;
-         for (var i = 0; i < Values.length; ++i)
+         if (isLegacyEdgeFunc == true)
           {
-            var v = Values[i];
-            if (v != null)
+            var totalValidElements = 0;
+            for (var i = 0; i < Values.length; ++i)
+             if (Values[i] != null)
+              ++totalValidElements;
+            var counter = 0;
+            var cells = 0;
+            for (var i = 0; i < Values.length; ++i)
              {
+               var v = Values[i];
+               if (v != null)
+                {
+                  var fullId = Ids.fullId+'_'+counter;
+                  Str += edgeFunc(cells, true, totalValidElements) 
+                      + '<A id="RADIO_'+fullId+'" class="Radio_' + (Default == v[0] ? 'ON' : 'OFF')
+                      + '" title="' + (v.length > 2 && v[2]!=null?v[2]:v[1]) 
+                      + '" href="javascript:Radio.click([\'' + Ids.formId + '\',\'' + Ids.elementId + '\'], \'' + v[0] + '\', \'RADIO_' + fullId
+                      + '\', ' + onChange + ',' + Mode + ');' + '">' + (noLabels == true ? '&nbsp;' : v[1]) + '</A>' 
+                      + edgeFunc(cells, false, totalValidElements) + '\n';
+                  ++counter;
+                  ++cells;
+                }
+               else
+                {
+                  Str+=edgeFunc(null, null, totalValidElements);
+                  var x = edgeFunc(cells, null, totalValidElements, null, true); // advance to first cell of next row.
+                  totalValidElements+=x;
+                  cells += x;
+                }
+             }
+          }
+         else
+          {
+            // New CSS Grid layout: ONE shared ".controlGrid" for the whole Values list, so every row
+            // shares the same column tracks (proper column-wise alignment) even across forced breaks -
+            // a null entry no longer starts an independent grid (which would size its columns on its own
+            // and misalign against neighboring rows); it instead inserts a full-row-spanning
+            // ".controlGridBreak" marker (see module-forms2.css) that simply pushes subsequent options to
+            // a fresh row within the SAME grid. columnsCount === 1 forces a single stacked column; any
+            // other value (or none) lets the grid auto-fit as many content-sized columns as fit within
+            // ".controlGrid"'s (capped) width.
+            var singleColumn = edgeFunc != null && edgeFunc._floriaColumnsCount == 1;
+            var gridClassNames = edgeFunc != null && edgeFunc._floriaClassNames ? ' '+edgeFunc._floriaClassNames : '';
+            var counter = 0;
+            Str += '<DIV class="controlGrid'+(singleColumn==true?' singleColumn':'')+gridClassNames+'">\n';
+            for (var i = 0; i < Values.length; ++i)
+             {
+               var v = Values[i];
+               if (v == null)
+                {
+                  Str += '<DIV class="controlGridBreak"></DIV>\n';
+                  continue;
+                }
                var fullId = Ids.fullId+'_'+counter;
-               Str += edgeFunc(cells, true, totalValidElements) 
-                   + '<A id="RADIO_'+fullId+'" class="Radio_' + (Default == v[0] ? 'ON' : 'OFF')
+               Str += '<A id="RADIO_'+fullId+'" class="Radio_' + (Default == v[0] ? 'ON' : 'OFF')
                    + '" title="' + (v.length > 2 && v[2]!=null?v[2]:v[1]) 
                    + '" href="javascript:Radio.click([\'' + Ids.formId + '\',\'' + Ids.elementId + '\'], \'' + v[0] + '\', \'RADIO_' + fullId
-                   + '\', ' + onChange + ',' + Mode + ');' + '">' + (noLabels == true ? '&nbsp;' : v[1]) + '</A>' 
-                   + edgeFunc(cells, false, totalValidElements) + '\n';
+                   + '\', ' + onChange + ',' + Mode + ');' + '">' + (noLabels == true ? '&nbsp;' : v[1]) + '</A>\n';
                ++counter;
-               ++cells;
              }
-            else
-             {
-               Str+=edgeFunc(null, null, totalValidElements);
-               var x = edgeFunc(cells, null, totalValidElements, null, true); // advance to first cell of next row.
-               totalValidElements+=x;
-               cells += x;
-             }
+            Str += '</DIV>\n';
           }
        }
       else 
@@ -134,6 +412,9 @@ var Radio = {
             var fullId = Ids.fullId+'_'+i;
             Str += '<B>'+v[1]+'<B>';
           }
+      // Kicks off the deferred, in-place column sizing (see sizeControlGrid()) - covers both the
+      // "insert it here" path below and the "return a string, caller inserts later" path.
+      scheduleControlGridSizing();
       if (ContainerId == null)
         return Str;
       FloriaDOM.setInnerHTML(ContainerId, Str);
@@ -244,9 +525,11 @@ var Checkbox = {
   header : Radio.header,
   gen : function(ContainerId, elementId, Values, edgeFunc, onChange, Defaults, noLabels)
     {
-      if (edgeFunc == null)
-       edgeFunc = defaultEdgeFunc;
-      
+      // See Radio.gen's comment: legacy callback-driven rendering only kicks in for a genuine custom
+      // edgeFunc (not produced by FloriaControls.TableEdgeFunc()). Nothing in this codebase currently
+      // calls Checkbox.gen that way, but the fallback is kept for parity/safety.
+      var isLegacyEdgeFunc = edgeFunc != null && edgeFunc._isFloriaTableEdgeFunc != true;
+
       if (Defaults != null && Defaults.indexOfSE == null)
         Defaults = [ Defaults ];
       
@@ -264,38 +547,69 @@ var Checkbox = {
            }
         }
 
-      var totalValidElements = 0;
-      for (var i = 0; i < Values.length; ++i)
-       if (Values[i] != null)
-         ++totalValidElements;
-      var counter = 0;
-      var cells = 0;
-      for (var i = 0; i < Values.length; ++i)
+      if (isLegacyEdgeFunc == true)
        {
-         var v = Values[i];
-         if (v != null)
+         var totalValidElements = 0;
+         for (var i = 0; i < Values.length; ++i)
+          if (Values[i] != null)
+            ++totalValidElements;
+         var counter = 0;
+         var cells = 0;
+         for (var i = 0; i < Values.length; ++i)
           {
-//            console.log("cells-within: "+cells);
+            var v = Values[i];
+            if (v != null)
+             {
+   //            console.log("cells-within: "+cells);
+               var match = Defaults != null && Defaults.indexOfSE(v[0]) != -1;
+               var fullId = Ids.fullId + '_' + counter;
+               Str += edgeFunc(cells, true, totalValidElements) 
+                   + '<A href="javascript:Checkbox.click([\'' + Ids.formId + '\',\'' + Ids.elementId+'_'+counter+ '\'], ' 
+                   + onChange + ',' + noneItem +');' + '" id="CHECKBOX_'
+                   + fullId + '" class="Checkbox_' + (match ? 'ON' : 'OFF') + '" title="' + (v.length > 2 && v[2]!=null?v[2]:v[1]) + '"><INPUT id="' + fullId
+                   + '" name="' + Ids.elementId + v[0] + '" type="hidden" value="' + (match ? '1' : '0') + '">' + (noLabels == true ? '' : v[1])
+                   + '</A>'
+                   + edgeFunc(cells, false, totalValidElements) + '\n';
+               ++counter;
+               ++cells;
+             }
+            else
+             {
+               Str+=edgeFunc(null, null, totalValidElements);
+               var x = edgeFunc(cells, null, totalValidElements, null, true); // advance to first cell of next row.
+               totalValidElements+=x;
+               cells += x;
+             }
+          }
+       }
+      else
+       {
+         // New CSS Grid layout - see Radio.gen's equivalent block for the shared-grid/row-break rationale.
+         var singleColumn = edgeFunc != null && edgeFunc._floriaColumnsCount == 1;
+         var gridClassNames = edgeFunc != null && edgeFunc._floriaClassNames ? ' '+edgeFunc._floriaClassNames : '';
+         var counter = 0;
+         Str += '<DIV class="controlGrid'+(singleColumn==true?' singleColumn':'')+gridClassNames+'">\n';
+         for (var i = 0; i < Values.length; ++i)
+          {
+            var v = Values[i];
+            if (v == null)
+             {
+               Str += '<DIV class="controlGridBreak"></DIV>\n';
+               continue;
+             }
             var match = Defaults != null && Defaults.indexOfSE(v[0]) != -1;
             var fullId = Ids.fullId + '_' + counter;
-            Str += edgeFunc(cells, true, totalValidElements) 
-                + '<A href="javascript:Checkbox.click([\'' + Ids.formId + '\',\'' + Ids.elementId+'_'+counter+ '\'], ' 
+            Str += '<A href="javascript:Checkbox.click([\'' + Ids.formId + '\',\'' + Ids.elementId+'_'+counter+ '\'], ' 
                 + onChange + ',' + noneItem +');' + '" id="CHECKBOX_'
                 + fullId + '" class="Checkbox_' + (match ? 'ON' : 'OFF') + '" title="' + (v.length > 2 && v[2]!=null?v[2]:v[1]) + '"><INPUT id="' + fullId
                 + '" name="' + Ids.elementId + v[0] + '" type="hidden" value="' + (match ? '1' : '0') + '">' + (noLabels == true ? '' : v[1])
-                + '</A>'
-                + edgeFunc(cells, false, totalValidElements) + '\n';
+                + '</A>\n';
             ++counter;
-            ++cells;
           }
-         else
-          {
-            Str+=edgeFunc(null, null, totalValidElements);
-            var x = edgeFunc(cells, null, totalValidElements, null, true); // advance to first cell of next row.
-            totalValidElements+=x;
-            cells += x;
-          }
+         Str += '</DIV>\n';
        }
+      // See Radio.gen - deferred, in-place column sizing.
+      scheduleControlGridSizing();
       if (ContainerId == null)
         return Str;
       FloriaDOM.setInnerHTML(ContainerId, Str);
@@ -730,4 +1044,10 @@ export var FloriaControls = { "Radio": Radio
                             , "Rating": Rating
                             , "Ranking": Ranking
                             , "TableEdgeFunc": tableEdgeFunc
+                            // Exposed for hosts that move/reparent already-rendered controls into a
+                            // different font context, or otherwise need to force a re-measure.
+                            // SizeControlGrids() only touches grids not yet sized; ResizeControlGrids()
+                            // forcibly re-measures every grid (what the internal resize handler calls).
+                            , "SizeControlGrids": sizeAllControlGrids
+                            , "ResizeControlGrids": resizeAllControlGrids
                             };

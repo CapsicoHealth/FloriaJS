@@ -1,0 +1,726 @@
+/* ===========================================================================
+ * Copyright (C) 2026 CapsicoHealth Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ============================================================
+   module-forms2.css
+   Consolidated styles for module-forms2.js (FloriaForms: form rendering +
+   the read-only report() view) AND module-controls.js (Radio, Checkbox,
+   Dropdown/select, ComboBox, Rating, Ranking - standalone controls that are
+   used both inside FloriaForms and completely on their own elsewhere).
+
+   This file was extracted out of the host app's capsico.css so that
+   module-forms2.js/module-controls.js are self-contained, drop-in-anywhere
+   OSS components: both now inject this stylesheet themselves via
+   FloriaDOM.injectCSSLink(), the same pattern already used by
+   module-dialog.js and module-login.js. Unlike that prior split (which was
+   a byte-for-byte relocation), THIS is a deliberate visual redesign - a
+   modern refresh (rounded fields, soft shadows, CSS-drawn radio/checkbox
+   indicators instead of legacy GIF sprites, clearer section headers, chip
+   style toggles) consistent with the newer ".florg*" look in
+   module-login.css - applied globally, with NO changes to the DOM/class
+   contract module-forms2.js/module-controls.js already emit, so every
+   existing caller across the platform picks up the new look automatically,
+   with no code changes required anywhere FloriaForms/FloriaControls are used.
+
+   Wherever a rule reads a CSS custom property normally defined by the host
+   app (capsico.css's :root block, e.g. --button-primary, --text-color), a
+   fallback value is supplied so this file also renders sensibly with no
+   host app present at all.
+
+   THEMING / OVERRIDE CONTRACT: the "--floria-forms-*" custom properties
+   declared in the :root block right below are this library's public theming
+   surface. They are deliberately namespaced with the "floria-forms-" prefix
+   (never reusing capsico.css's own variable names directly, and specific
+   enough not to collide with unrelated "forms" concepts elsewhere in this
+   codebase, e.g. the older CapsicoBase/Forms product) so a host app can
+   re-theme FloriaForms/FloriaControls in one of two ways, without ever
+   touching this file:
+     1. Do nothing - "--floria-forms-*" reads the app's existing
+        --button-primary/--text-color/etc. (with a hardcoded fallback if the
+        app doesn't define them), so it already matches the app's palette
+        "for free".
+     2. Redeclare any subset of "--floria-forms-*" directly at :root in
+        capsico.css (or an app-specific Wanda.getOverrideCssFile()). Because
+        capsico.css's <link> is always injected AFTER this one (see
+        module-forms2.js/module-controls.js's
+        injectCSSLink("FLORIA_CSS_ANCHOR", true, ...) call - FLORIA_CSS_ANCHOR
+        is capsico.css's own <link> tag in header.jsp), a plain
+        ":root { --floria-forms-accent: #123456; }" in capsico.css reliably
+        wins the cascade (equal :root specificity, later source order) with
+        no !important needed - e.g. to give FloriaForms a totally different
+        accent color than --button-primary without affecting any other
+        component that also reads --button-primary.
+
+   Deliberately NOT moved here (left in capsico.css as-is): .NA/.NA_Clean,
+   .tableLayout, .column/.innerFlowedDiv, .itemLayout, .codesSelectionBox -
+   these are broader platform-wide primitives also used far outside
+   FloriaForms/FloriaControls (FloriaTable, generic split-pane layout,
+   Pickers' selection chips, etc.), so redesigning them is out of scope
+   here. Also NOT moved: the older, unrelated "printed forms" system's
+   .FormContainer/.formHeader/.formBody/.formFooter/.formBanner (capitalized
+   "Form..." family) - that belongs to a different, legacy forms product,
+   not module-forms2.js.
+   ============================================================ */
+
+/* Public theming surface (see the THEMING / OVERRIDE CONTRACT note above) - override any subset
+   of these at :root in capsico.css (or a Wanda.getOverrideCssFile() override stylesheet) to
+   re-theme FloriaForms/FloriaControls independently of the rest of the app, e.g.:
+     :root { --floria-forms-accent: #7a3fd6; --floria-forms-accent-hover: #6127b8; --floria-forms-radius: 6px; } */
+:root {
+  --floria-forms-radius:        10px;  /* corner radius: buttons/selects/comboboxes/dialog-ish chrome */
+  --floria-forms-radius-pill:   999px; /* corner radius: text inputs/textareas/radio-checkbox chips/formButton */
+  --floria-forms-border:        #dde2e8;
+  --floria-forms-border-hover:  #b9c4d0;
+  --floria-forms-bg:            #FFFFFF;
+  --floria-forms-bg-subtle:     #f7f9fb;
+  --floria-forms-text:          var(--text-color, #34495e);
+  --floria-forms-text-light:    #77828c;
+  --floria-forms-accent:        var(--button-primary, #2E6690);       /* checked/focused/primary action color */
+  --floria-forms-accent-hover:  var(--button-primary-hover, #24526F);
+  --floria-forms-danger:        var(--button-danger, #B3392C);        /* validation/error color */
+  --floria-forms-danger-hover:  var(--button-danger-hover, #942F24);
+  --floria-forms-shadow:        0 1px 3px rgba(20, 30, 45, 0.08);
+  --floria-forms-shadow-lg:     0 8px 24px rgba(20, 30, 45, 0.14);
+  --floria-forms-shadow-focus:  0 0 0 3px rgba(46, 102, 144, 0.18);
+  --floria-forms-radio-col-min: 9em; /* min column width for ".controlGrid" (FloriaControls.Radio/Checkbox) - see below */
+}
+
+
+/*********************************************************
+  Generic HTML form fields
+  (used with or without FloriaForms/FloriaControls - plain <input>/
+  <textarea>/<select>/<button> anywhere in the host app)
+**********************************************************/
+input[type="text"], input[type="password"], input[type="date"], input[type="email"],
+input[type="tel"], input[type="number"], textarea {
+  color: var(--floria-forms-text);
+  border: 1px solid var(--floria-forms-border);
+  width: 90%;
+  font-size: 90%;
+  font-family: inherit;
+  padding: 6px 12px;
+  background-color: var(--floria-forms-bg);
+  border-radius: var(--floria-forms-radius-pill);
+  box-shadow: var(--floria-forms-shadow);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+textarea {
+  border-radius: 16px;
+}
+input[type="date"] {
+  font-size: 82%;
+}
+input[type="text"]:disabled, input[type="password"]:disabled, input[type="date"]:disabled,
+input[type="email"]:disabled, input[type="tel"]:disabled, input[type="number"]:disabled, textarea:disabled {
+  background-color: #eceff2;
+  box-shadow: none;
+  opacity: 0.65;
+  color: #667;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23CC6666" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="6" y1="6" x2="18" y2="18"/></svg>') 12 12, not-allowed;
+}
+input[type="text"]::placeholder, input[type="email"]::placeholder, input[type="password"]::placeholder,
+input[type="tel"]::placeholder, input[type="date"]::placeholder, textarea::placeholder {
+  color: #99a3ad;
+}
+input[type="text"]:focus, input[type="password"]:focus, input[type="date"]:focus, input[type="email"]:focus,
+input[type="tel"]:focus, input[type="number"]:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--floria-forms-accent);
+  box-shadow: var(--floria-forms-shadow-focus);
+  background-color: var(--floria-forms-bg);
+}
+
+select {
+  font-size: 88%;
+  font-family: inherit;
+  color: var(--floria-forms-text);
+  border: 1px solid var(--floria-forms-border);
+  background-color: var(--floria-forms-bg);
+  border-radius: var(--floria-forms-radius);
+  padding: 4px 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+select:focus {
+  outline: none;
+  border-color: var(--floria-forms-accent);
+  box-shadow: var(--floria-forms-shadow-focus);
+}
+
+button {
+  border-radius: var(--floria-forms-radius);
+  border: 1px solid var(--floria-forms-border);
+  background-color: var(--floria-forms-bg);
+  color: var(--floria-forms-text);
+  padding: 6px 16px;
+  font-size: 95%;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: var(--floria-forms-shadow);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+button:hover {
+  border-color: var(--floria-forms-border-hover);
+  background-color: var(--floria-forms-bg-subtle);
+}
+button:active {
+  transform: translateY(1px);
+}
+button:disabled {
+  border-color: var(--floria-forms-border);
+  color: #AAAAAA;
+  cursor: auto;
+  box-shadow: none;
+  background-color: var(--floria-forms-bg-subtle);
+}
+
+
+/*********************************************************
+  Radio / Checkbox  (FloriaControls.Radio / FloriaControls.Checkbox)
+  Deliberately NOT styled as bordered/pill "chips" (unlike inputs/buttons
+  below): FloriaForms renders many of these side-by-side or stacked one per
+  line (see e.g. featuresGeneVar_0/1/2 in a fixed-percentage-width nested
+  table), so every extra px of margin/padding/border here is multiplied
+  across every option - a bordered chip look both overflows narrow
+  fixed-width columns (making width-constrained host panels wider than
+  intended) and, stacked vertically, balloons row height in
+  height-constrained hosts. Kept minimal: just a small CSS-drawn indicator
+  + text, no box around the whole control, so it also doesn't read as a
+  miniature text input next to real <input>/<select> fields on the same row.
+**********************************************************/
+.Checkbox_ON, .Checkbox_OFF, .Checkbox_GREY, .Checkbox_ON:link, .Checkbox_OFF:link, .Checkbox_GREY:link,
+.Checkbox_ON:visited, .Checkbox_OFF:visited, .Checkbox_GREY:visited,
+.Radio_ON, .Radio_OFF, .Radio_ON:link, .Radio_OFF:link, .Radio_ON:visited, .Radio_OFF:visited {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: top;
+  gap: 0.35em;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--floria-forms-text);
+  border: none;
+  font-weight: normal;
+  background: none;
+  background-image: none;
+  margin: 1px 14px 1px 0px;
+  padding: 2px 2px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.Checkbox_ON:hover, .Checkbox_OFF:hover,
+.Radio_ON:hover, .Radio_OFF:hover {
+  color: var(--floria-forms-accent-hover);
+}
+
+/* Radio indicator: a ring, filled with a dot (via radial-gradient) when ON. */
+.Radio_ON::before, .Radio_OFF::before {
+  content: "";
+  flex: none;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  border: 1.5px solid var(--floria-forms-border-hover);
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.Radio_ON::before {
+  border-color: var(--floria-forms-accent);
+  background: radial-gradient(circle, var(--floria-forms-accent) 0 38%, #fff 42% 100%);
+}
+
+/* Checkbox indicator: a rounded square, showing a checkmark glyph when ON. */
+.Checkbox_ON::before, .Checkbox_OFF::before, .Checkbox_GREY::before {
+  content: "\2713";
+  flex: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  font-size: 0.78em;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1.5px solid var(--floria-forms-border-hover);
+  background: #fff;
+  color: transparent;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.Checkbox_ON::before {
+  border-color: var(--floria-forms-accent);
+  background: var(--floria-forms-accent);
+  color: #fff;
+}
+
+.Radio_ON, .Checkbox_ON {
+  color: var(--floria-forms-accent-hover);
+  font-weight: 600;
+}
+
+.Checkbox_GREY, .Checkbox_GREY:link, .Checkbox_GREY:visited {
+  color: #b3bac2;
+  cursor: default;
+}
+.Checkbox_GREY::before {
+  border-color: #e2e6ea;
+  background: #f1f3f5;
+}
+
+.outline .Checkbox_OFF, .outline .Checkbox_ON, .outline .Radio_OFF, .outline .Radio_ON {
+  line-height: 1.2em;
+}
+@media only screen and (device-width: 768px) {
+  .outline .Checkbox_OFF, .outline .Checkbox_ON, .outline .Radio_OFF, .outline .Radio_ON {
+    line-height: 1.8em;
+  }
+}
+
+/* Container Radio.gen()/Checkbox.gen() now wrap each field's whole option list in (see
+   module-controls.js's tableEdgeFunc()/Radio.gen()/Checkbox.gen() - the old fixed-N-columns <TABLE>
+   layout has been retired in favor of this CSS Grid).
+   The "grid-template-columns" below is only a FALLBACK, used until (or without) the JS sizing pass in
+   module-controls.js, which replaces it inline with an explicit "repeat(N, max-content)". The reason
+   JS gets involved at all: this fallback necessarily yields EQUAL-width columns, because auto-fit needs
+   a single definite minimum to divide the available width by, and that minimum must accommodate the
+   field's WIDEST label. That's needlessly pessimistic - two options measuring 260px and 180px in a 505px
+   container "don't fit" as equal tracks (2 x 260 + 14 = 534) yet trivially fit content-sized
+   (260 + 180 + 14 = 454). CSS can't express "as many columns as fit, each sized to its own content"
+   (auto-fit + an intrinsic minimum collapses to a single repetition), so sizeControlGrid() measures each
+   option and picks the count itself. "--floria-forms-radio-col-min" (see :root) remains the themable
+   knob for the fallback only.
+   A null entry in Values (Radio.gen/Checkbox.gen) is a deliberate "force a new row here" marker - it's
+   rendered as a full-row-spanning ".controlGridBreak" element INSIDE this same grid (not a brand new
+   sibling grid), so every row still shares the exact same column tracks (proper column-wise alignment)
+   even across forced breaks. */
+.controlGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--floria-forms-radio-col-min, 9em), 1fr));
+  justify-content: start;
+  column-gap: 14px;
+  row-gap: 4px;
+  align-items: start;
+  margin: 2px 0px;
+}
+.controlGrid.singleColumn {
+  grid-template-columns: 1fr;
+}
+.controlGrid > .controlGridBreak {
+  grid-column: 1 / -1;
+  height: 0px;
+  margin: 0px;
+  padding: 0px;
+}
+/* Spacing now comes from .controlGrid's gap, not each option's own right margin (a per-option fixed
+   margin would otherwise skew column-width math since only some options end up last-in-row).
+   white-space stays "nowrap" (as the base rule above sets): a radio/checkbox label is a single atomic
+   choice and must never break across lines. That's also why the sizing pass (sizeControlGrid() in
+   module-controls.js) uses the widest option's full single-line width as the column minimum, with no
+   cap: capping it would be pointless here anyway, since a grid item's automatic minimum size is its
+   min-content width - which for non-wrapping text IS the whole label - so the tracks would just expand
+   past any cap and overflow the container. The honest consequence is that the widest label dictates how
+   many columns fit; when it can't fit two, the field correctly falls back to a single column. */
+.controlGrid > .Radio_ON, .controlGrid > .Radio_OFF,
+.controlGrid > .Checkbox_ON, .controlGrid > .Checkbox_OFF, .controlGrid > .Checkbox_GREY {
+  margin: 1px 0px;
+  white-space: nowrap;
+}
+
+
+
+/*********************************************************
+  Rating / Ranking  (FloriaControls.Rating / FloriaControls.Ranking)
+**********************************************************/
+.RatingStars IMG {
+  height: 20px;
+  vertical-align: middle;
+  cursor: pointer;
+  margin-right: 2px;
+  transition: transform 0.1s ease;
+}
+.RatingStars IMG:hover {
+  transform: scale(1.15);
+}
+.RatingLabel {
+  margin-left: 10px;
+  font-size: 88%;
+  color: var(--floria-forms-text-light);
+  font-style: italic;
+}
+
+.Ranking {
+}
+.Ranking img {
+  position: relative;
+  height: 15px;
+  vertical-align: middle;
+  padding: 2px 6px 2px 6px;
+  top: -1px;
+  cursor: pointer;
+}
+.Ranking img.left {
+  position: relative;
+  left: 4px;
+}
+.Ranking img.right {
+  position: relative;
+  left: -2px;
+}
+
+
+/*********************************************************
+  ComboBox  (FloriaControls.ComboBox)
+**********************************************************/
+.floriaCombo {
+  display: inline-block;
+  position: relative;
+}
+.floriaCombo INPUT[type="text"] {
+  border-radius: var(--floria-forms-radius-pill);
+}
+.floriaCombo IMG {
+  height: 18px;
+  vertical-align: text-bottom;
+}
+.floriaCombo SPAN {
+  cursor: pointer;
+}
+.floriaCombo UL {
+  font-size: 90%;
+  position: absolute;
+  max-height: 260px;
+  white-space: nowrap;
+  padding: 6px;
+  margin-top: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  border: 1px solid var(--floria-forms-border);
+  z-index: 100;
+  background-color: var(--floria-forms-bg);
+  box-shadow: var(--floria-forms-shadow-lg);
+  border-radius: var(--floria-forms-radius);
+}
+.floriaCombo UL LI {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  list-style-type: none;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background-color 0.1s ease;
+}
+.floriaCombo UL LI:hover {
+  background-color: var(--selected-color, #c8e8ff);
+}
+
+
+/*********************************************************
+  FloriaForms - field labels & row layout
+**********************************************************/
+.fieldNameSpan {
+  font-weight: 600;
+  white-space: nowrap;
+  padding-right: 3px;
+}
+.fieldName, .fieldName2, .fieldName3 {
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  width: 1px;
+  vertical-align: top;
+  padding-right: 10px;
+  color: var(--floria-forms-text);
+}
+.fieldName2 {
+  padding-left: 25px;
+  font-size: 90%;
+}
+.fieldName3 {
+  font-weight: normal;
+  padding-right: 2em;
+}
+.fieldName.mandatory, .fieldName2.mandatory {
+  background-image: none;
+  padding-right: 20px;
+  position: relative;
+}
+.fieldName.mandatory::after, .fieldName2.mandatory::after {
+  content: "*";
+  position: absolute;
+  right: 6px;
+  top: 0px;
+  color: var(--floria-forms-danger);
+  font-weight: bold;
+}
+
+.fieldQuestion {
+  font-weight: 600;
+  text-align: left;
+  vertical-align: top;
+  color: var(--floria-forms-text);
+}
+.fieldQuestion.mandatory {
+  background-image: none;
+  padding-left: 14px;
+  position: relative;
+}
+.fieldQuestion.mandatory::before {
+  content: "*";
+  position: absolute;
+  left: 0px;
+  color: var(--floria-forms-danger);
+  font-weight: bold;
+}
+.fieldQuestion + TABLE {
+  margin-left: 0px;
+}
+
+.bottomPadded, .bottomPadded TD {
+  vertical-align: top;
+  padding: 0px 6px 4px 0px;
+}
+.bottomPadded:hover TD:first-child.fieldName2 {
+  text-decoration: dashed underline;
+}
+.withIndenting .fieldName, .withIndenting .fieldQuestion {
+  padding-left: 12px;
+}
+
+
+/*********************************************************
+  FloriaForms - section headers
+  (".formForm ..." variants = edit mode; unscoped variants = report() mode,
+  whose markup isn't wrapped in a ".formForm" table)
+**********************************************************/
+.formForm .formGroupName, .formForm .formLabelName {
+  font-weight: 700;
+  font-size: 115%;
+  color: var(--floria-forms-text);
+  border: none;
+  border-bottom: 2px solid var(--floria-forms-border);
+  background-color: transparent;
+  margin: 26px 10px 10px 0px;
+  padding: 0px 0px 6px 0px;
+  letter-spacing: -0.2px;
+}
+.formGroupName, .formLabelName {
+  font-weight: 700;
+  font-size: 115%;
+  text-align: left;
+  color: var(--floria-forms-text);
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid var(--floria-forms-border);
+  margin-top: 24px;
+  margin-bottom: 8px;
+  letter-spacing: -0.2px;
+}
+.formForm .formLabelDescr {
+  font-style: normal;
+  margin: -4px 0px 12px 0px;
+  color: var(--floria-forms-text-light);
+  font-size: 88%;
+}
+.formReportSection {
+  font-weight: 700;
+  font-size: 120%;
+  text-align: left;
+  color: var(--floria-forms-text);
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid var(--floria-forms-border-hover);
+  margin-top: 34px;
+  margin-bottom: 8px;
+  letter-spacing: -0.2px;
+}
+
+
+/*********************************************************
+  FloriaForms - form chrome (wrapper/buttons/footer/collapser/wizard nav)
+**********************************************************/
+.formForm {
+  font-size: 105%;
+}
+.formForm > table {
+  margin-bottom: 20px;
+  border-collapse: separate;
+  border-spacing: 0px 2px;
+}
+
+.formButton {
+  font-size: 100%;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--floria-forms-radius-pill);
+  background-color: var(--floria-forms-accent);
+  color: #fff;
+  box-shadow: var(--floria-forms-shadow);
+  padding: 8px 24px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+.formButton:hover {
+  background-color: var(--floria-forms-accent-hover);
+  box-shadow: var(--floria-forms-shadow-lg);
+}
+.formButton:active {
+  transform: translateY(1px);
+}
+.formButton:disabled {
+  border-radius: var(--floria-forms-radius-pill);
+  box-shadow: none;
+  background-color: #c9ced4;
+  color: #fff;
+}
+.formButtonBusy {
+  background-image: url("/static/img/progress.gif");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+  padding-left: 36px;
+}
+.formButton.formButtonBusy, .formButton:disabled.formButtonBusy {
+  border-radius: var(--floria-forms-radius-pill);
+  box-shadow: none;
+  background-color: #9aa3ad;
+  color: #fff;
+  text-shadow: none;
+}
+
+.formNavFooter {
+  position: absolute;
+  bottom: 0px;
+  width: 100%;
+  background: color-mix(in oklab, var(--floria-forms-accent) 6%, #fff 100%);
+  border-top: 1px solid var(--floria-forms-border);
+  padding: 14px 0px;
+  text-align: center;
+}
+.formContainer {
+  top: 0px;
+  bottom: 60px;
+  width: 99%;
+  margin-left: 1%;
+  font-size: 100%;
+}
+.popupFormDiv {
+  width: 90%;
+  margin: auto;
+  padding-top: 5px;
+}
+.formScrollableCustom {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  bottom: 100px;
+  right: 0px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  margin: 20px 10px 5px 20px;
+  box-shadow: var(--floria-forms-shadow-lg);
+  border-radius: var(--floria-forms-radius);
+}
+
+.formCollapser {
+  position: relative;
+  float: right;
+  top: -28px;
+  width: 34px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--floria-forms-radius-pill);
+  background: var(--floria-forms-bg-subtle);
+  border: 1px solid var(--floria-forms-border);
+  font-weight: bold;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.formCollapser.collapsed {
+  float: none;
+  top: 0px;
+  width: 100%;
+  border-radius: var(--floria-forms-radius);
+  font-weight: normal;
+  box-shadow: 0px 8px 6px -6px rgba(0,0,0,0.12);
+}
+.formCollapser:hover {
+  background-color: var(--floria-forms-bg);
+  box-shadow: var(--floria-forms-shadow);
+}
+
+.formWizzardSelection {
+  border-right: 1px solid var(--floria-forms-border);
+  background-color: var(--floria-forms-bg-subtle);
+}
+.formWizzardSelection LI {
+  line-height: 1.6;
+  margin-bottom: 6px;
+  padding: 8px 14px;
+  border-radius: 8px 0px 0px 8px;
+}
+
+
+/*********************************************************
+  FloriaForms - validation
+**********************************************************/
+.formError {
+  background-color: color-mix(in oklab, var(--floria-forms-danger) 6%, #fff 100%);
+  border-radius: 8px;
+}
+.formError .fieldQuestion, .formError .fieldName, .formError .fieldName2 {
+  color: var(--floria-forms-danger);
+  font-style: italic;
+}
+
+
+/*********************************************************
+  FloriaForms - Bool Wall
+**********************************************************/
+.floriaForms_boolwall {
+  position: relative;
+  width: 95%;
+  text-align: center;
+  left: 4%;
+}
+.floriaForms_boolwall_label TD {
+  font-size: 120%;
+  font-variant: small-caps;
+  font-weight: 700;
+  color: var(--floria-forms-accent);
+}
+.floriaForms_boolwall_img TD {
+  padding: 0px 0px 40px 0px;
+}
+.floriaForms_boolwall_img IMG {
+  cursor: pointer;
+  filter: drop-shadow(4px 4px 2px #CCC) invert(30%);
+  transition: filter 0.15s ease;
+}
+.floriaForms_boolwall_img IMG.floriaForms_customSelected {
+  filter: drop-shadow(5px 5px 3px #bbb) invert(10%);
+}
+.floriaForms_boolwall_img_2 IMG {
+  cursor: pointer;
+}
+.floriaForms_boolwall_img_2 IMG.floriaForms_customSelected {
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--floria-forms-accent);
+  filter: drop-shadow(4px 4px 2px #AAA);
+}

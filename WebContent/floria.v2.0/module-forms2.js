@@ -23,6 +23,13 @@ import { FloriaFactories } from "./module-factories.js";
 import { FloriaDate      } from "./module-date.js";
 import { FloriaDialog    } from "./module-dialog.js";
 
+const DT_LOAD = window._STARTUP_DATE_MS || new Date().getTime();
+
+// Consolidated with module-controls.js (both self-inject the same stylesheet; injectCSSLink()
+// is idempotent - a <link> for a given href is only ever added once - so it doesn't matter which
+// of the two modules a given page happens to import, or whether it imports both).
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-forms2.css?ts="+DT_LOAD, import.meta.url).href);
+
 
 function makeUpdatePageFunc(that, toPageId, reset) 
   { 
