@@ -19,7 +19,9 @@
 import { FloriaDOM   } from "./module-dom.js";
 import { createPopper } from "/static/jslibs/popperjs/popper.js";
 
-FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-dialog.css", import.meta.url).href);
+const DT_LOAD = window._STARTUP_DATE_MS || new Date().getTime();
+
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-dialog.css?ts="+DT_LOAD, import.meta.url).href);
 
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Floria Dialog
@@ -299,8 +301,32 @@ export function FloriaTooltipDialog(elementId, content, arrow, manual, additiona
                offset: [0, offset||0]
              }
            }
+          // Without 'flip', an anchor with too little room in its preferred
+          // direction (e.g. a top-row cell in a scrollable table using
+          // placement:'top') gets its tooltip squeezed/clipped by
+          // preventOverflow instead of flipping to the opposite side where
+          // there IS room — this is what made tooltips look clipped/
+          // mispositioned near a scrollable ancestor's edge.
+          ,{ name: 'flip'
+            ,options: {
+               boundary    : document.body
+              ,rootBoundary: 'viewport'
+              ,fallbackPlacements: ['top', 'bottom', 'right', 'left']
+             }
+           }
           ,{ name: 'preventOverflow'
             ,options: {
+               // The tooltip <div> itself is portaled to document.body, so it
+               // should never be clipped by a scrollable ancestor of the
+               // anchor (e.g. a "overflow:auto" table wrapper) — only by the
+               // actual browser viewport. NOTE: 'boundary' must be an actual
+               // Element (or the default 'clippingParents', which WOULD walk
+               // up through — and get squeezed by — any overflow:auto/hidden
+               // ancestor like .mx-wrap); 'viewport' is only valid as a
+               // rootBoundary value, not as boundary.
+               boundary    : document.body
+              ,rootBoundary: 'viewport'
+              ,altAxis     : true
               }
            }
         ]
@@ -748,6 +774,36 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
          if (t._statusGen === myGen) // nothing else touched this tab's status in the meantime
           self.setTabStatus(idx, null);
        }, 2500);
+    }
+
+   /**
+    * Updates a tab's header label text/HTML after the fact (e.g. to append a live document
+    * count, "All Documents (145)", as filters change) — mirrors setTabStatus() above, but for
+    * the label itself rather than the separate busy/success/failure badge.
+    *
+    * Safe to call at any time, including before the tab has ever been rendered/selected (e.g.
+    * right after construction, before show() has run): this._tabs[idx].label is updated either
+    * way, so a LATER show()/re-render (which rebuilds every header SPAN from this._tabs[i].label)
+    * still picks up the latest value. If the header SPAN already exists in the DOM, it's also
+    * updated in place immediately — cheaper than a full show() and it doesn't disturb the
+    * sliding-underline indicator (a separate ::after pseudo-element) or any status badge
+    * (::before), nor reset which tab is currently selected.
+    *
+    *   tabIdOrLabel - the tab's numeric index, or its ORIGINAL/CURRENT .label string (same
+    *                  resolution rules as setTabStatus() — see _resolveTabIndex() above).
+    *   newLabel     - the new label (HTML allowed, same as the "label" tabs-array property
+    *                  itself, which is interpolated unescaped when show() first builds the
+    *                  header — see the "tabs" jsdoc above).
+    */
+   this.setTabLabel = function(tabIdOrLabel, newLabel)
+    {
+      var idx = this._resolveTabIndex(tabIdOrLabel);
+      if (idx == null)
+       return;
+      this._tabs[idx].label = newLabel;
+      var headerEl = document.getElementById(elementId+'_TABHEADER_'+idx);
+      if (headerEl != null)
+       headerEl.innerHTML = newLabel;
     }
 
    this.select = function(i)

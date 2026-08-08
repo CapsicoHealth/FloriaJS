@@ -287,11 +287,22 @@
   /* border: 1px solid black;   */
 }
 
-.tabContainer .tabHeader {
+.tabContainer > .tabHeader {
   position: relative; /* anchors the absolutely-positioned .tabHelpIcon below, for both skins */
 }
 
-.tabContainer .tabBody {
+/* NOTE: every rule targeting a container's own .tabHeader/.tabBody — in BOTH skins, and in the
+   --pos-* variants further below — uses the CHILD combinator ">", never a descendant space.
+   FloriaTabs instances NEST: a tab panel very commonly hosts a component that mounts its own
+   FloriaTabs (e.g. FloriaExpressionEditor's Editor/Preview tabs inside an app's own dialog tabs).
+   With descendant selectors, an outer MODERN container reaches INTO an inner CLASSIC one and
+   turns that inner .tabBody into a flex item (position:relative; flex:1 1 auto) even though the
+   inner .tabContainer is NOT a flex column — the inner body then simply grows to its content
+   height and spills out of its host instead of scrolling within its panel (and, symmetrically,
+   classic header styling would leak into a nested modern header). Direct-child scoping keeps
+   each container styling strictly its own header/body, so nesting any skin inside any other
+   skin "just works". */
+.tabContainer > .tabBody {
   position: absolute;
   top: 2em;
   bottom: 0px;
@@ -300,7 +311,7 @@
   overflow: hidden;
 }
 
-.tabContainer .tabBody > DIV {
+.tabContainer > .tabBody > DIV {
   position: relative;
   height: 100%;
   -webkit-overflow-scrolling: touch;
@@ -309,20 +320,20 @@
   display: none;
 }
 
-.tabContainer .tabBody > DIV.selected {
+.tabContainer > .tabBody > DIV.selected {
   display: block;
   /* padding: 0px 1vw 0px 1vw; */
 }
 
 /* ---- Classic skin (default) ---- */
 
-.tabContainer .tabHeader {
+.tabContainer > .tabHeader {
   border-bottom: 1px solid #EEE;
   box-shadow: 0 4px 2px -0px #EEE;
   margin: 2px 0px 0px -20px;
 }
 
-.tabContainer .tabHeader SPAN {
+.tabContainer > .tabHeader SPAN {
   border: 1px solid #BBB;
   margin-left: 0px;
   border-radius: 6px 6px 0 0;         /* slightly rounded top edges */
@@ -331,11 +342,11 @@
   transition-duration: 350ms;
   user-select: none;
 }
-.tabContainer .tabHeader SPAN:first-child {
+.tabContainer > .tabHeader SPAN:first-child {
   margin-left: 20px;
 }
 
-.tabContainer .tabHeader span.selected {
+.tabContainer > .tabHeader span.selected {
   background-color: #e8f4ff;          /* softer blue for a lighter modern look */
   color: #1a3d5d;                     /* deeper blue for good contrast */
   font-weight: 600;                   /* semi-bold instead of bold */
@@ -348,7 +359,7 @@
 }
 
 /* Optional: hover state for unselected tabs */
-.tabContainer .tabHeader span:not(.selected):hover {
+.tabContainer > .tabHeader span:not(.selected):hover {
   background-color: #f4faff;
   color: #1a3d5d;
   cursor: pointer;
@@ -384,7 +395,7 @@
    shared classic rules above - override back to normal flex-item flow for
    the modern skin, so the flex column on .tabContainer--modern above does
    the sizing (no hard-coded offset needed). */
-.tabContainer--modern .tabBody {
+.tabContainer--modern > .tabBody {
   position: relative;
   flex: 1 1 auto;
   top: auto;
@@ -392,7 +403,7 @@
   min-height: 0; /* allow the flex item to shrink below its content's natural height so its own overflow:hidden can kick in */
 }
 
-.tabContainer--modern .tabHeader {
+.tabContainer--modern > .tabHeader {
   position: relative;
   flex: 0 0 auto;
   display: flex;
@@ -406,11 +417,11 @@
   overflow-x: auto;
   scrollbar-width: none;
 }
-.tabContainer--modern .tabHeader::-webkit-scrollbar {
+.tabContainer--modern > .tabHeader::-webkit-scrollbar {
   display: none;
 }
 
-.tabContainer--modern .tabHeader SPAN {
+.tabContainer--modern > .tabHeader SPAN {
   position: relative;
   display: inline-block;
   border: none;
@@ -423,7 +434,7 @@
   white-space: nowrap;
   transition: color var(--tabs-transition), background-color var(--tabs-transition);
 }
-.tabContainer--modern .tabHeader SPAN:first-child {
+.tabContainer--modern > .tabHeader SPAN:first-child {
   margin-left: 0px;
 }
 
@@ -431,7 +442,7 @@
    each tab owns one, invisible until selected, so no extra markup/JS required).
    Uses the same gradient as the dialog's own .modalTitle bar (--modalTitleGradient)
    so the "active tab" indicator visually ties back to the dialog header above it. */
-.tabContainer--modern .tabHeader SPAN::after {
+.tabContainer--modern > .tabHeader SPAN::after {
   content: '';
   position: absolute;
   left: 10px;
@@ -446,13 +457,13 @@
   transition: opacity var(--tabs-transition), transform var(--tabs-transition);
 }
 
-.tabContainer--modern .tabHeader span:not(.selected):hover {
+.tabContainer--modern > .tabHeader span:not(.selected):hover {
   color: var(--tabs-text);
   background: var(--tabs-accent-bg-hover);
   cursor: pointer;
 }
 
-.tabContainer--modern .tabHeader span.selected {
+.tabContainer--modern > .tabHeader span.selected {
   color: var(--tabs-accent);
   font-weight: 600;
   text-decoration: none;
@@ -462,7 +473,7 @@
   border-radius: 0px;
   padding: 0.6em 1em;   /* override classic's asymmetric selected-state padding */
 }
-.tabContainer--modern .tabHeader span.selected::after {
+.tabContainer--modern > .tabHeader span.selected::after {
   opacity: 1;
   transform: scaleX(1);
 }
@@ -530,15 +541,15 @@
    (The modern skin already does this itself via its own flex-column rules, so this mainly
    matters for the classic skin, but applying it unconditionally is harmless/idempotent for
    modern too.) */
-.tabContainer.tabContainer--pos-bottom .tabHeader,
-.tabContainer.tabContainer--pos-left   .tabHeader,
-.tabContainer.tabContainer--pos-right  .tabHeader {
+.tabContainer.tabContainer--pos-bottom > .tabHeader,
+.tabContainer.tabContainer--pos-left   > .tabHeader,
+.tabContainer.tabContainer--pos-right  > .tabHeader {
   position: relative !important;
   flex: 0 0 auto !important;
 }
-.tabContainer.tabContainer--pos-bottom .tabBody,
-.tabContainer.tabContainer--pos-left   .tabBody,
-.tabContainer.tabContainer--pos-right  .tabBody {
+.tabContainer.tabContainer--pos-bottom > .tabBody,
+.tabContainer.tabContainer--pos-left   > .tabBody,
+.tabContainer.tabContainer--pos-right  > .tabBody {
   position: relative !important;
   top: auto !important;
   bottom: auto !important;
@@ -552,7 +563,7 @@
 /* --pos-bottom keeps a normal horizontal header, just re-ordered below the body via
    flex-direction:column-reverse above — flip its border/shadow to the top edge instead of the
    bottom edge (visually it now sits just above the body, not below it). */
-.tabContainer.tabContainer--pos-bottom .tabHeader {
+.tabContainer.tabContainer--pos-bottom > .tabHeader {
   border-bottom: none;
   border-top: 1px solid #EEE;
   box-shadow: 0 -4px 2px -0px #EEE;
@@ -563,8 +574,8 @@
    width), with the body taking up the remaining horizontal space. Also overrides the modern
    skin's own ".tabContainer--modern .tabHeader" (display:flex; flex-direction:row; overflow-x:auto;
    ...) which would otherwise keep the labels running horizontally instead of stacked vertically. */
-.tabContainer.tabContainer--pos-left .tabHeader,
-.tabContainer.tabContainer--pos-right .tabHeader {
+.tabContainer.tabContainer--pos-left > .tabHeader,
+.tabContainer.tabContainer--pos-right > .tabHeader {
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch;
@@ -577,23 +588,23 @@
   gap: 2px;
   width: auto !important;
 }
-.tabContainer.tabContainer--pos-left .tabHeader SPAN[data-tabid],
-.tabContainer.tabContainer--pos-right .tabHeader SPAN[data-tabid] {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN[data-tabid],
+.tabContainer.tabContainer--pos-right > .tabHeader SPAN[data-tabid] {
   writing-mode: vertical-rl !important;
   white-space: nowrap;
   margin-left: 0;
   text-align: center;
   flex: 0 0 auto;
 }
-.tabContainer.tabContainer--pos-left .tabHeader SPAN:first-child,
-.tabContainer.tabContainer--pos-right .tabHeader SPAN:first-child {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN:first-child,
+.tabContainer.tabContainer--pos-right > .tabHeader SPAN:first-child {
   margin-left: 0;
 }
 /* vertical-rl alone renders glyphs stacked top-to-bottom (equivalent to the label rotated
    +90deg) — already correct as-is for the RIGHT edge. For the LEFT edge, flip it a further
    180deg so the label instead reads bottom-to-top (equivalent to -90deg overall), matching the
    familiar "vertical tab on the left" convention. */
-.tabContainer.tabContainer--pos-left .tabHeader SPAN[data-tabid] {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN[data-tabid] {
   transform: rotate(180deg) !important;
 }
 
@@ -621,8 +632,8 @@
    without this exclusion BOTH fixes would fire together on a modern-skin tab (this border-left
    PLUS the ::after bar below), rendering as two redundant/overlapping accents at once instead of
    one. */
-.tabContainer.tabContainer--pos-left:not(.tabContainer--modern) .tabHeader span.selected,
-.tabContainer.tabContainer--pos-right:not(.tabContainer--modern) .tabHeader span.selected {
+.tabContainer.tabContainer--pos-left:not(.tabContainer--modern) > .tabHeader span.selected,
+.tabContainer.tabContainer--pos-right:not(.tabContainer--modern) > .tabHeader span.selected {
   border-bottom: 1px solid #BBB !important;
   border-left: 3px solid #1a3d5d !important;
   padding: 3px 20px 3px 10px !important; /* classic's ".selected" normally widens right padding to
@@ -634,8 +645,8 @@
    bottom, into a vertical bar pinned to the inner (left, pre-transform) edge, running the tab's
    full height instead of its full width — and swap its show/hide transform from scaleX (horizontal
    growth, meaningless for a vertical bar) to scaleY (vertical growth, matching). */
-.tabContainer.tabContainer--pos-left .tabHeader SPAN::after,
-.tabContainer.tabContainer--pos-right .tabHeader SPAN::after {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN::after,
+.tabContainer.tabContainer--pos-right > .tabHeader SPAN::after {
   left: 3px !important;
   right: auto !important;
   bottom: 10px !important;
@@ -645,16 +656,16 @@
   border-radius: 0 3px 3px 0;
   transform: scaleY(0.6) !important;
 }
-.tabContainer.tabContainer--pos-left .tabHeader SPAN.selected::after,
-.tabContainer.tabContainer--pos-right .tabHeader SPAN.selected::after {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN.selected::after,
+.tabContainer.tabContainer--pos-right > .tabHeader SPAN.selected::after {
   transform: scaleY(1) !important;
 }
 
 /* The "(?)" help icon is normally absolutely-positioned against the (horizontal) header's right
    edge (see ".tabHelpIcon" further below) — for a vertical left/right header that no longer
    makes sense, so pin it just below the tab column instead. */
-.tabContainer.tabContainer--pos-left .tabHeader SPAN.tabHelpIcon,
-.tabContainer.tabContainer--pos-right .tabHeader SPAN.tabHelpIcon {
+.tabContainer.tabContainer--pos-left > .tabHeader SPAN.tabHelpIcon,
+.tabContainer.tabContainer--pos-right > .tabHeader SPAN.tabHelpIcon {
   position: relative;
   writing-mode: horizontal-tb;
   transform: none;
@@ -685,12 +696,12 @@
   ADDS position:relative + a new pseudo-element — nothing here overrides an existing property the
   way ".tabHelpIcon" had to).
 **********************************************************/
-.tabContainer .tabHeader SPAN[data-tabid] {
+.tabContainer > .tabHeader SPAN[data-tabid] {
   position: relative; /* anchors the [data-tabstatus] badge below (modern skin already sets this
                           itself, but classic's base SPAN rule does not) */
 }
 
-.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus]::before {
+.tabContainer > .tabHeader SPAN[data-tabid][data-tabstatus]::before {
   position: absolute;
   /* Sized in em, relative to THIS pseudo-element's own font-size (set right below) rather than
      fixed px — so the badge scales naturally with whatever font-size the tab header/skin ends up
@@ -716,7 +727,7 @@
 }
 
 /* Busy — looping spinner ring (stays looping for as long as data-tabstatus="busy" is set). */
-.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="busy"]::before {
+.tabContainer > .tabHeader SPAN[data-tabid][data-tabstatus="busy"]::before {
   content: "";
   background: transparent;
   border: 0.2em solid rgba(85,121,198,0.25);
@@ -725,7 +736,7 @@
 }
 
 /* Success — green dot with a check mark; a short pop-in flourish, then remains static. */
-.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="success"]::before {
+.tabContainer > .tabHeader SPAN[data-tabid][data-tabstatus="success"]::before {
   content: "\2713"; /* ✓ */
   background: #22c55e;
   border: 1px solid #15803d;
@@ -733,7 +744,7 @@
 }
 
 /* Failure — red dot with an × mark; a short pop-in + shake flourish, then remains static. */
-.tabContainer .tabHeader SPAN[data-tabid][data-tabstatus="failure"]::before {
+.tabContainer > .tabHeader SPAN[data-tabid][data-tabstatus="failure"]::before {
   content: "\2715"; /* ✕ */
   background: #ef4444;
   border: 1px solid #b91c1c;
@@ -782,8 +793,8 @@
    padding, border-radius, margin-left, ...) — everything NOT overridden here (color, background,
    box-shadow, ...) still simply comes from this same, now-winning rule.
 */
-.tabContainer .tabHeader SPAN.tabHelpIcon,
-.tabContainer--modern .tabHeader SPAN.tabHelpIcon {
+.tabContainer > .tabHeader SPAN.tabHelpIcon,
+.tabContainer--modern > .tabHeader SPAN.tabHelpIcon {
   position: absolute;
   /* Same em-relative-to-own-font-size pattern as the status badge above (see its comment) — the
      icon's overall footprint (width/height/right/top offsets) all derive from font-size below,
@@ -821,8 +832,8 @@
 .tabHelpIcon::before {
   content: "i";
 }
-.tabContainer .tabHeader SPAN.tabHelpIcon:hover,
-.tabContainer--modern .tabHeader SPAN.tabHelpIcon:hover {
+.tabContainer > .tabHeader SPAN.tabHelpIcon:hover,
+.tabContainer--modern > .tabHeader SPAN.tabHelpIcon:hover {
   background: #4f6fb0;
   color: #fff;
   border-color: #4f6fb0;
