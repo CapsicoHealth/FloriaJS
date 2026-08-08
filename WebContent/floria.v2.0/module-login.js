@@ -17,19 +17,30 @@
 "use strict";
 
 import { FloriaDOM      } from "./module-dom.js";
-import { FloriaDialog, FloriaTabs, FloriaAlert  } from "./module-dialog.js";
+import { FloriaDialog, FloriaTabs, FloriaAlert, FloriaAlertSimple } from "./module-dialog.js";
 import { FloriaAjax     } from "./module-ajax.js";
 import { FloriaForms    } from "./module-forms2.js";
 import { FloriaDate     } from "./module-date.js";
 import { FloriaText     } from "./module-text.js";
 import { FloriaControls } from "./module-controls.js";
 import { FloriaPayments } from "./module-payments.js";
+import { FloriaTable    } from "./module-tables.js";
 
 export var FloriaLogin = { };
 
 window.FloriaLogin = FloriaLogin;
 
 var cacheBuster = new Date().getTime();
+
+FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, new URL("./module-login.css?ts="+cacheBuster, import.meta.url).href);
+
+// Small local HTML-escape helper (module-scoped, not exported) used by PopupOrganizations below.
+function _floriaLoginEsc(str)
+ {
+   if (str == null)
+    return "";
+   return String(str).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+ }
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1107,6 +1118,505 @@ FloriaLogin.Verifications = {
    {
      FloriaLogin.PopupLogin.showError(code, msg, errors);
    }
+};
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// FloriaLogin.PopupOrganizations
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * Manages the "Your Organizations" popup: lists organizations the current user created or has
+ * ACL access to (in two separate sections), and lets the user create/update organizations they
+ * own or administer, soft/hard-delete/restore organizations they own (OWNER only), and manage the
+ * ACL list of an organization (ADMIN/OWNER only, enforced server-side). Modeled after the Project
+ * management UI pattern used in CapsicoWebDynamic's app-shell.js / project-manage.js, using
+ * FloriaDialog/FloriaTabs/FloriaTable the same way.
+ */
+FloriaLogin.PopupOrganizations = {
+  dlgHandle      : null,  // list dialog
+  manageDlgHandle: null,  // manage (info/ACL tabs) dialog
+
+  // Role definitions (must match OrganizationACL_Data values on the backend). Owner is implicit
+  // (the creator) and is never itself grantable/selectable here.
+  ROLES: [ { value: "A", label: "Admin"  }
+         , { value: "W", label: "Writer" }
+         , { value: "R", label: "Reader" }
+         ],
+
+  _me: function()
+    {
+      return window.currentUser?.person?.userRefnum ?? null;
+    },
+
+  /** Entry point: shows the list of organizations the user created or has access to. */
+  show: function()
+    {
+      if (FloriaLogin.PopupOrganizations.dlgHandle == null)
+       FloriaLogin.PopupOrganizations.dlgHandle = new FloriaDialog("DLG_POPUP_ORGANIZATIONS");
+      FloriaLogin.PopupOrganizations.dlgHandle.show("Your Organizations", null, 0.62, 0.78, function(contentDivId) {
+          FloriaLogin.PopupOrganizations._renderList(contentDivId);
+        });
+    },
+
+  _renderList: async function(contentDivId)
+    {
+      let host = document.getElementById(contentDivId);
+      if (host == null)
+       return;
+      host.innerHTML = '<div class="florgWrap"><br><br><center><img src="/static/img/progress.gif" height="40px"></center></div>';
+
+      let orgs;
+      try {
+        orgs = await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/list", "GET"
+                                            ,"Could not load your organizations. Please try again.", null, null, null, 15000);
+      } catch (e) {
+        return;
+      }
+      if (Array.isArray(orgs) == false)
+       orgs = [];
+
+      let me     = FloriaLogin.PopupOrganizations._me();
+      let mine   = orgs.filter(function(o) { return o.creatorRefnum == me; });
+      let shared = orgs.filter(function(o) { return o.creatorRefnum != me; });
+
+      host.innerHTML =
+          '<div class="florgWrap">'
+        +   '<div class="florgToolbar"><button id="florgNewBtn" class="florgBtn florgBtnPrimary" type="button">+ New Organization</button></div>'
+        +   '<div class="florgSection"><h3>Organizations You Created</h3><div id="florgMineHost"></div></div>'
+        +   '<div class="florgSection"><h3>Organizations Shared With You</h3><div id="florgSharedHost"></div></div>'
+        + '</div>'
+        ;
+
+      FloriaDOM.addEvent("florgNewBtn", "click", function() { FloriaLogin.PopupOrganizations._openEditForm(null); }, null, true);
+
+      FloriaLogin.PopupOrganizations._paintOrgList("florgMineHost"  , mine  , true , "You haven't created any organizations yet.");
+      FloriaLogin.PopupOrganizations._paintOrgList("florgSharedHost", shared, false, "No organizations have been shared with you yet.");
+    },
+
+  _paintOrgList: function(hostId, list, isMine, emptyMsg)
+    {
+      let host = document.getElementById(hostId);
+      if (host == null)
+       return;
+      if (list.length == 0)
+       {
+         host.innerHTML = '<div class="florgEmpty">'+emptyMsg+'</div>';
+         return;
+       }
+
+      let str = '<table class="florgTable"><tr><th>Organization</th><th>Description</th><th>Status</th><th>Last Updated</th><th></th></tr>';
+      for (let i = 0; i < list.length; ++i)
+       {
+         let o = list[i];
+         let lastUpdated = FloriaDate.parseDateTime(o.lastUpdated);
+         str+= '<tr data-refnum="'+o.refnum+'">'
+             +   '<td class="florgLink" data-action="manage">'+_floriaLoginEsc(o.title)+'</td>'
+             +   '<td>'+_floriaLoginEsc(o.description||"")+'</td>'
+             +   '<td>'+(o.status=="AC"?"Active":o.status=="AR"?"Archived":_floriaLoginEsc(o.status))+'</td>'
+             +   '<td>'+(lastUpdated==null?"":lastUpdated.printFriendly(true, true))+'</td>'
+             +   '<td class="florgRowActions">'
+             +     '<button class="florgBtn florgBtnSmall" data-action="manage">Manage</button>'
+             +   '</td>'
+             + '</tr>'
+             ;
+       }
+      str+='</table>';
+      host.innerHTML = str;
+
+      FloriaDOM.addEvent(hostId, "click", function(e, event, target) {
+          if (target.nodeName != "BUTTON" && target.dataset.action == null)
+           return;
+          let tr = FloriaDOM.getAncestorNode(target, "TR", "refnum");
+          if (tr == null)
+           return;
+          let refnum = 1*tr.dataset.refnum;
+          let o = list.find(function(x) { return x.refnum == refnum; });
+          if (o == null)
+           return;
+          let action = target.dataset.action;
+          if (action == "manage")
+           FloriaLogin.PopupOrganizations._openManage(o);
+        }, null, true);
+    },
+
+  /**
+   * Opens a create/update form. `org` is null for a brand new organization, or an existing
+   * organization record to update (used both from the "+ New Organization" button and from the
+   * Manage dialog's "Organization Info" tab).
+   */
+  _openEditForm: function(org)
+    {
+      let createDlg = new FloriaDialog("DLG_POPUP_ORGANIZATION_EDIT");
+      let isNew = org == null;
+      createDlg.show(isNew==true?"New Organization":"Update Organization", null, 0.45, 0.5, function(contentDivId) {
+          document.getElementById(contentDivId).innerHTML = `
+            <div class="florgForm">
+              <div>
+                <label>Organization Title <span class="florgReq">*</span></label>
+                <input id="florgEditTitle" type="text" maxlength="1024" value="${_floriaLoginEsc(org?.title)}" placeholder="e.g. Acme Health Systems">
+              </div>
+              <div>
+                <label>Description</label>
+                <textarea id="florgEditDesc" rows="4" maxlength="4096" placeholder="Optional free-text description">${_floriaLoginEsc(org?.description||"")}</textarea>
+              </div>
+              <div id="florgEditErr" class="florgError" style="display:none;"></div>
+              <div class="florgActions">
+                <button id="florgEditCancel" class="florgBtn" type="button">Cancel</button>
+                <button id="florgEditSave" class="florgBtn florgBtnPrimary" type="button">${isNew==true?"Create Organization":"Save Changes"}</button>
+              </div>
+            </div>
+          `;
+
+          document.getElementById("florgEditCancel").addEventListener("click", function() { createDlg.hide(true); });
+
+          document.getElementById("florgEditSave").addEventListener("click", async function() {
+              let title = (document.getElementById("florgEditTitle").value||"").trim();
+              let desc  = (document.getElementById("florgEditDesc" ).value||"").trim();
+              let errEl = document.getElementById("florgEditErr");
+              if (title == "")
+               {
+                 errEl.textContent = "An organization title is required.";
+                 errEl.style.display = "block";
+                 return;
+               }
+              errEl.style.display = "none";
+
+              let btn = document.getElementById("florgEditSave");
+              btn.disabled = true;
+              btn.textContent = "Saving…";
+              try {
+                let params = { title: title, description: desc };
+                if (isNew == false)
+                 params.refnum = org.refnum;
+                await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/create", "POST"
+                          ,"Could not save the organization. Please try again.", null, null, params, 15000);
+                createDlg.hide(false);
+                if (FloriaLogin.PopupOrganizations.dlgHandle != null)
+                 FloriaLogin.PopupOrganizations._renderList(FloriaLogin.PopupOrganizations.dlgHandle.getId());
+              } catch (e) {
+                btn.disabled = false;
+                btn.textContent = isNew==true?"Create Organization":"Save Changes";
+              }
+            });
+        });
+    },
+
+  /** Opens the "Manage Organization" dialog (Organization Info + Access Control tabs). */
+  _openManage: function(org)
+    {
+      if (FloriaLogin.PopupOrganizations.manageDlgHandle == null)
+       FloriaLogin.PopupOrganizations.manageDlgHandle = new FloriaDialog("DLG_POPUP_ORGANIZATION_MANAGE");
+      let isMine = org.creatorRefnum == FloriaLogin.PopupOrganizations._me();
+      FloriaLogin.PopupOrganizations.manageDlgHandle.show("Manage Organization", null, 0.64, 0.8, function(contentDivId) {
+          let tabs = new FloriaTabs(contentDivId, [
+              { label: "Organization Info", onSelectHandler: function(panelId, first) { if (first==true) FloriaLogin.PopupOrganizations._renderInfoPanel(panelId, org, isMine); } }
+             ,{ label: "Access Control"   , onSelectHandler: function(panelId, first) { if (first==true) FloriaLogin.PopupOrganizations._renderAccessPanel(panelId, org); } }
+            ], null, null, null, "modern");
+          tabs.show(0);
+        });
+    },
+
+  _renderInfoPanel: function(panelId, org, isMine)
+    {
+      let panel = document.getElementById(panelId);
+      if (panel == null)
+       return;
+      let isDeleted = org.deleted != null;
+      panel.innerHTML = `
+        <div class="florgForm">
+          <div>
+            <label>Organization Title <span class="florgReq">*</span></label>
+            <input id="florgMgrTitle" type="text" maxlength="1024" value="${_floriaLoginEsc(org.title)}">
+          </div>
+          <div>
+            <label>Description</label>
+            <textarea id="florgMgrDesc" rows="4" maxlength="4096">${_floriaLoginEsc(org.description||"")}</textarea>
+          </div>
+          <div id="florgMgrErr" class="florgError" style="display:none;"></div>
+          <div class="florgActions">
+            <button id="florgMgrSave" class="florgBtn florgBtnPrimary" type="button">Save Changes</button>
+          </div>
+          <div id="florgMgrBanner" class="florgBanner" style="display:none;"></div>
+          ${isMine!=true?"":
+             '<hr class="florgHr">'
+            +'<div class="florgDangerZone"><h4>Danger Zone</h4>'
+            +(isDeleted==false
+               ? '<p>Archiving hides this organization from lists. You can restore it later, or permanently delete it afterwards.</p>'
+                +'<button id="florgMgrDeleteSoft" class="florgBtn florgBtnDanger" type="button">Archive / Delete</button>'
+               : '<p>This organization is currently archived/deleted.</p>'
+                +'<button id="florgMgrUndelete" class="florgBtn" type="button">Restore</button>'
+                +'<button id="florgMgrDeleteHard" class="florgBtn florgBtnDanger" type="button">Delete Permanently</button>'
+              )
+            +'</div>'
+          }
+        </div>
+      `;
+
+      document.getElementById("florgMgrSave").addEventListener("click", async function() {
+          let title = (document.getElementById("florgMgrTitle").value||"").trim();
+          let desc  = (document.getElementById("florgMgrDesc" ).value||"").trim();
+          let errEl = document.getElementById("florgMgrErr");
+          if (title == "")
+           {
+             errEl.textContent = "An organization title is required.";
+             errEl.style.display = "block";
+             return;
+           }
+          errEl.style.display = "none";
+
+          let btn = document.getElementById("florgMgrSave");
+          btn.disabled = true;
+          btn.textContent = "Saving…";
+          try {
+            let updated = await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/create", "POST"
+                      ,"Could not save the organization. Please try again.", null, null
+                      ,{ refnum: org.refnum, title: title, description: desc }, 15000);
+            org.title = updated.title;
+            org.description = updated.description;
+            let banner = document.getElementById("florgMgrBanner");
+            if (banner != null)
+             {
+               banner.textContent = "Changes saved.";
+               banner.style.display = "block";
+               setTimeout(function() { if (banner != null) banner.style.display = "none"; }, 2500);
+             }
+            if (FloriaLogin.PopupOrganizations.dlgHandle != null)
+             FloriaLogin.PopupOrganizations._renderList(FloriaLogin.PopupOrganizations.dlgHandle.getId());
+          } catch (e) {
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "Save Changes";
+          }
+        });
+
+      if (isMine == true)
+       {
+         let softBtn = document.getElementById("florgMgrDeleteSoft");
+         if (softBtn != null)
+          softBtn.addEventListener("click", function() { FloriaLogin.PopupOrganizations._doDelete(org, "soft"); });
+         let undelBtn = document.getElementById("florgMgrUndelete");
+         if (undelBtn != null)
+          undelBtn.addEventListener("click", function() { FloriaLogin.PopupOrganizations._doDelete(org, "undelete"); });
+         let hardBtn = document.getElementById("florgMgrDeleteHard");
+         if (hardBtn != null)
+          hardBtn.addEventListener("click", function() { FloriaLogin.PopupOrganizations._doDelete(org, "hard"); });
+       }
+    },
+
+  /** Soft/hard-deletes or restores an organization (OWNER-only per OrganizationDelete.java's server-side ACL check). */
+  _doDelete: function(org, mode)
+    {
+      let msg = mode=="hard"     ? "Permanently delete '"+_floriaLoginEsc(org.title)+"'? This cannot be undone."
+              : mode=="undelete" ? "Restore '"+_floriaLoginEsc(org.title)+"'?"
+              :                    "Archive/delete '"+_floriaLoginEsc(org.title)+"'? You can restore it later, or permanently delete it afterwards."
+              ;
+      new FloriaAlertSimple(msg, null, mode=="undelete"?"Restore":"Delete", "Cancel", async function() {
+          try {
+            await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/delete", "POST"
+                      ,"Could not update the organization. Please try again.", null, null
+                      ,{ refnum: org.refnum, deleteMode: mode }, 15000);
+            if (FloriaLogin.PopupOrganizations.manageDlgHandle != null && FloriaLogin.PopupOrganizations.manageDlgHandle.isVisible() == true)
+             FloriaLogin.PopupOrganizations.manageDlgHandle.hide(false);
+            if (FloriaLogin.PopupOrganizations.dlgHandle != null)
+             FloriaLogin.PopupOrganizations._renderList(FloriaLogin.PopupOrganizations.dlgHandle.getId());
+          } catch (e) {
+          }
+        }).show();
+    },
+
+  // ── Access Control tab ──────────────────────────────────────────────────────
+
+  _renderAccessPanel: function(panelId, org)
+    {
+      let panel = document.getElementById(panelId);
+      if (panel == null)
+       return;
+      panel.innerHTML = `
+        <div class="florgForm florgAclForm">
+          <div class="florgActions">
+            <button id="florgAclInviteBtn" class="florgBtn florgBtnPrimary" type="button">+ Invite New User</button>
+          </div>
+          <div id="florgInviteInline" style="display:none;"></div>
+          <div id="florgAclTblHost" class="florgAclTableHost"></div>
+        </div>
+      `;
+
+      document.getElementById("florgAclInviteBtn").addEventListener("click", function() {
+          FloriaLogin.PopupOrganizations._toggleInviteForm(org);
+        });
+
+      FloriaLogin.PopupOrganizations._loadAclTable(org);
+    },
+
+  /**
+   * Toggles an inline "Invite New User" form open/closed right inside the Access Control panel
+   * (pushing the ACL table down below it) rather than opening a separate dialog — collects a
+   * first name, last name, and email address for someone who does not yet have an account. NOTE:
+   * there is no backend "invite" service yet — submitting currently just shows a placeholder
+   * confirmation. Once the real invite endpoint exists, wire its call up where the TODO below is
+   * marked.
+   */
+  _toggleInviteForm: function(org)
+    {
+      let host = document.getElementById("florgInviteInline");
+      let btn  = document.getElementById("florgAclInviteBtn");
+      if (host == null)
+       return;
+
+      if (host.style.display != "none")
+       {
+         host.style.display = "none";
+         host.innerHTML = "";
+         if (btn != null)
+          btn.style.display = "";
+         return;
+       }
+
+      if (btn != null)
+       btn.style.display = "none";
+      host.style.display = "block";
+      host.innerHTML = `
+        <div class="florgInviteInline">
+          <div class="florgInviteRow">
+            <div class="florgInviteField">
+              <label>First Name <span class="florgReq">*</span></label>
+              <input id="florgInviteFirst" type="text" maxlength="256" placeholder="First name">
+            </div>
+            <div class="florgInviteField">
+              <label>Last Name <span class="florgReq">*</span></label>
+              <input id="florgInviteLast" type="text" maxlength="256" placeholder="Last name">
+            </div>
+          </div>
+          <div class="florgInviteField">
+            <label>Email Address <span class="florgReq">*</span></label>
+            <input id="florgInviteEmail" type="email" maxlength="256" placeholder="name@example.com">
+          </div>
+          <div id="florgInviteErr" class="florgError" style="display:none;"></div>
+          <div class="florgActions">
+            <button id="florgInviteCancel" class="florgBtn" type="button">Cancel</button>
+            <button id="florgInviteSend" class="florgBtn florgBtnPrimary" type="button">Send Invite</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("florgInviteCancel").addEventListener("click", function() {
+          FloriaLogin.PopupOrganizations._toggleInviteForm(org);
+        });
+
+      document.getElementById("florgInviteSend").addEventListener("click", function() {
+          let fName = (document.getElementById("florgInviteFirst").value||"").trim();
+          let lName = (document.getElementById("florgInviteLast" ).value||"").trim();
+          let email = (document.getElementById("florgInviteEmail").value||"").trim();
+          let errEl = document.getElementById("florgInviteErr");
+          if (fName == "" || lName == "" || email == "")
+           {
+             errEl.textContent = "First name, last name, and email are all required.";
+             errEl.style.display = "block";
+             return;
+           }
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) == false)
+           {
+             errEl.textContent = "Please enter a valid email address.";
+             errEl.style.display = "block";
+             return;
+           }
+          errEl.style.display = "none";
+
+          // TODO: no backend "invite" service exists yet. Once available, replace this
+          // placeholder with something like:
+          //   await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/invite", "POST"
+          //             ,"Could not send the invitation. Please try again.", null, null
+          //             ,{ organizationRefnum: org.refnum, nameFirst: fName, nameLast: lName, email: email }, 15000);
+          FloriaLogin.PopupOrganizations._toggleInviteForm(org);
+          new FloriaAlert(
+              '<div class="florgInvitePlaceholder">'
+            +   '<h3>Coming Soon</h3>'
+            +   '<p>Invitations aren\'t connected to the backend yet — nothing was sent to '
+            +     '<b>'+_floriaLoginEsc(fName)+' '+_floriaLoginEsc(lName)+'</b> ('+_floriaLoginEsc(email)+').</p>'
+            +   '<p>This is a placeholder; the real invitation flow will be wired up soon.</p>'
+            + '</div>'
+            , 0.42, 0.34).show();
+        });
+    },
+
+  async _loadAclTable(org)
+    {
+      let host = document.getElementById("florgAclTblHost");
+      if (host == null)
+       return;
+
+      let acls;
+      try {
+        acls = await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/acl/list?organizationRefnum="+org.refnum+"&orderBy=id"
+                                            ,"GET", "Could not load the access list. Please try again.", null, null, null, 15000);
+        if (Array.isArray(acls) == false)
+         acls = [];
+      } catch (e) {
+        host.innerHTML = '<p class="florgError">Failed to load access list.</p>';
+        return;
+      }
+
+      if (acls.length == 0)
+       {
+         host.innerHTML = '<p class="florgEmpty">No additional members yet. Use "+ Invite New User" above to invite someone to this organization.</p>';
+         return;
+       }
+
+      let roleLabel = function(v) { let r = FloriaLogin.PopupOrganizations.ROLES.find(function(x){return x.value==v;}); return r==null?v:r.label; };
+
+      let columns = [
+          { field: "userId"     , label: "User"        , type: "string"  , wrap: "nowrap", sortable: true, preSorted: "asc" }
+         ,{ field: "role"       , label: "Role"         , type: "string"  , wrap: "clip", minWidth: "110px", sortable: true
+           , renderer: function(row) {
+               let opts = FloriaLogin.PopupOrganizations.ROLES.map(function(r) { return '<option value="'+r.value+'"'+(row.role==r.value?" selected":"")+'>'+r.label+'</option>'; }).join("");
+               return '<select class="florgAclRoleSel" data-refnum="'+row.refnum+'">'+opts+'</select>';
+             }
+           }
+         ,{ field: "grantedById", label: "Granted By"  , type: "string"  , wrap: "nowrap", sortable: true }
+         ,{ field: "lastUpdated", label: "Last Updated", type: "datetime", wrap: "nowrap", sortable: true }
+         ,{ field: "refnum"     , label: ""             , wrap: "clip", minWidth: "90px"
+           , renderer: function(row) { return '<button class="florgAclRevokeBtn" data-refnum="'+row.refnum+'" title="Revoke access">✕ Revoke</button>'; }
+           }
+        ];
+
+      host.innerHTML = "";
+      new FloriaTable("florgAclTblHost", columns, acls, false, false, false).render();
+
+      host.querySelectorAll(".florgAclRoleSel").forEach(function(sel) {
+          sel.addEventListener("change", async function() {
+              let refnum = 1*sel.dataset.refnum;
+              let row = acls.find(function(a) { return a.refnum == refnum; });
+              if (row == null)
+               return;
+              let oldVal = sel.dataset.currentRole || row.role;
+              sel.dataset.currentRole = sel.value;
+              try {
+                await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/acl/create", "POST"
+                          ,"Could not update the role. Please try again.", null, null
+                          ,{ organizationRefnum: org.refnum, userRefnum: row.userRefnum, role: sel.value }, 15000);
+              } catch (e) {
+                sel.value = oldVal;
+              }
+            });
+        });
+
+      host.querySelectorAll(".florgAclRevokeBtn").forEach(function(btn) {
+          btn.addEventListener("click", async function() {
+              let refnum = 1*btn.dataset.refnum;
+              btn.disabled = true;
+              btn.textContent = "Revoking…";
+              try {
+                await FloriaAjax.ajaxUrlAsync("/"+FloriaLogin.PopupLogin.basePath+"/svc/wanda/organizations/organization/acl/delete", "POST"
+                          ,"Could not revoke access. Please try again.", null, null
+                          ,{ organizationRefnum: org.refnum, refnum: refnum }, 15000);
+                await FloriaLogin.PopupOrganizations._loadAclTable(org);
+              } catch (e) {
+                btn.disabled = false;
+                btn.textContent = "✕ Revoke";
+              }
+            });
+        });
+    }
 };
 
 
