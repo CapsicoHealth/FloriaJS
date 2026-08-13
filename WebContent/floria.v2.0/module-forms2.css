@@ -207,7 +207,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   vertical-align: top;
-  gap: 0.35em;
+  gap: 0.2em;
   white-space: nowrap;
   text-decoration: none;
   color: var(--floria-forms-text);
@@ -310,7 +310,7 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--floria-forms-radio-col-min, 9em), 1fr));
   justify-content: start;
-  column-gap: 14px;
+  column-gap: 0.5em;
   row-gap: 4px;
   align-items: start;
   margin: 2px 0px;
@@ -555,7 +555,7 @@ button:disabled {
   FloriaForms - form chrome (wrapper/buttons/footer/collapser/wizard nav)
 **********************************************************/
 .formForm {
-  font-size: 105%;
+  font-size: 100%;
 }
 .formForm > table {
   margin-bottom: 20px;
@@ -610,12 +610,12 @@ button:disabled {
   padding: 14px 0px;
   text-align: center;
 }
-.formContainer {
+.innerFlowedDiv.formContainer, .formContainer {
   top: 0px;
-  bottom: 60px;
+  bottom: 2.5em;
   width: 99%;
-  margin-left: 1%;
   font-size: 100%;
+  margin-bottom: 1.5em;
 }
 .popupFormDiv {
   width: 90%;
@@ -675,6 +675,11 @@ button:disabled {
   padding: 8px 14px;
   border-radius: 8px 0px 0px 8px;
 }
+
+.formForm .floriaCombo {
+  width: 96%;
+}
+
 
 
 /*********************************************************
