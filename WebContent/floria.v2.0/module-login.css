@@ -190,6 +190,12 @@
   font-size: 0.85rem;
   margin-top: 0.5em;
 }
+.florgBannerWarning {
+  color: #8a6300;
+  background-color: #fff3cd;
+  border-color: #f5e1a4;
+  margin-bottom: 1em;
+}
 .florgActions {
   display: flex;
   justify-content: flex-end;
@@ -211,6 +217,13 @@
   font-size: 0.82rem;
   color: #6b7580;
   margin: 0 0 0.6em 0;
+}
+.florgTransferForm {
+  margin-top: 1em;
+  padding: 0.9em 1em 0.2em 1em;
+  border: 1px solid #d7dde3;
+  border-radius: 8px;
+  background-color: #f9fbfd;
 }
 
 /* ── Access Control tab ─────────────────────────────────────────────────── */
@@ -240,6 +253,66 @@
   background-color: var(--button-danger, #e2564a);
   color: var(--button-fg, #fff);
 }
+
+/* ── Manage Invitations tab ──────────────────────────────────────────────── */
+.florgSeats {
+  font-size: 0.85rem;
+  margin-bottom: 0.6em;
+}
+.florgSeatsOk {
+  color: #1c7c3f;
+}
+.florgSeatsFull {
+  color: #d0362a;
+  font-weight: 600;
+}
+.florgSeatsUnlimited {
+  color: #6b7580;
+  font-style: italic;
+}
+.florgInvToolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6em;
+  margin-bottom: 0.75em;
+}
+
+/* Groups the status filter and the invitations table into one visually-connected "card", so the
+   filter is clearly attached to the table it controls (rather than floating above the inline
+   invite form, which now renders separately, above this card). */
+.florgInvTableCard {
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.florgInvTableCardToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.6em 0.75em;
+  background-color: var(--baseline-color-shade, #eef2f6);
+  border-bottom: 1px solid #d7dde3;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #203040;
+}
+.florgInvTableCard .florgAclTableHost {
+  margin-top: 0;
+}
+
+.florgInvStatus {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.florgInvStatus-PE { background-color: #fff3cd; color: #8a6300; }
+.florgInvStatus-AC { background-color: #eaf7ef; color: #1c7c3f; }
+.florgInvStatus-DC { background-color: #f4f0f8; color: #5a4a7a; }
+.florgInvStatus-CN { background-color: #f1f2f4; color: #5b6470; }
+.florgInvStatus-EX { background-color: #fdeceb; color: #b3392c; }
 
 /* ── Invite-new-user (inline form + placeholder confirmation) ──────────── */
 .florgInviteInline {

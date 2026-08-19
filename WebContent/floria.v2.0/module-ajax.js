@@ -112,7 +112,9 @@ ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, t
           if (error != null && error.status||error.code == 401 && FloriaLogin.PopupLogin.isAuthPassthrough(url) == false)
            {
 //             return alert("NO ACL!");
-             return FloriaLogin.PopupLogin.show(true, function() { FloriaAjax.ajaxUrl(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs) });
+             return FloriaLogin.PopupLogin.show(true, function() {
+                  FloriaAjax.ajaxUrl(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs);
+             });
            }
           else
             {
