@@ -421,8 +421,18 @@ export class FloriaTable {
    *                                             (see .ftbl-row-selected) as soon as the table is
    *                                             first painted — no click / handler invocation,
    *                                             purely visual. Ignored if out of range.
+   * @param {string}   [description=null]      – optional blurb rendered as a sibling flex-item
+   *                                             inside the existing filter bar row (no extra
+   *                                             vertical height). Clips with an ellipsis when it
+   *                                             doesn't fit; the full text is always available via
+   *                                             its `title` attribute. The filter input keeps a
+   *                                             12em minimum width and absorbs/yields whatever
+   *                                             space remains.
+   * @param {boolean}  [descriptionFirst=false] – when true, the description sits to the LEFT of
+   *                                             the filter input; otherwise (default) it sits to
+   *                                             the right, after it.
    */
-  constructor(parentDivId, columns, data, enableFilter = true, wideTable = false, showRowNumbers = true, preSelectedIndex = null) {
+  constructor(parentDivId, columns, data, enableFilter = true, wideTable = false, showRowNumbers = true, preSelectedIndex = null, description = null, descriptionFirst = false) {
     this._id             = parentDivId;
     this._columns        = (columns || []).map(c => ({
       ...c,
@@ -435,6 +445,8 @@ export class FloriaTable {
     this._enableFilter   = enableFilter;
     this._wideTable      = wideTable;
     this._showRowNumbers = showRowNumbers;
+    this._description      = description;
+    this._descriptionFirst = descriptionFirst === true;
     this._hasSummary     = (columns || []).some(c => c.summary === true);
     // Click-handler bookkeeping: when exactly ONE column carries an onClickHandler, the whole
     // row becomes clickable (pointer cursor + click-anywhere) instead of just that cell — see
@@ -477,10 +489,16 @@ export class FloriaTable {
     if (!host) throw new Error('FloriaTable: element #' + this._id + ' not found');
     host.classList.add('ftbl-root');
 
-    var filterBar = this._enableFilter
+    var descHtml = this._description
+      ? `<div class="ftbl-filter-desc" title="${_ftAttrEsc(this._description)}">${_ftEsc(this._description)}</div>`
+      : '';
+
+    var filterBar = (this._enableFilter || descHtml)
       ? `<div class="ftbl-filterbar">
-           <input id="${this._id}_FLT" class="ftbl-filter-input" type="text" placeholder="Filter…" value="${this._filterText}">
-           <span id="${this._id}_CNT" class="ftbl-filter-count"></span>
+           ${this._descriptionFirst ? descHtml : ''}
+           ${this._enableFilter ? `<input id="${this._id}_FLT" class="ftbl-filter-input" type="text" placeholder="Filter…" value="${this._filterText}">` : ''}
+           ${this._enableFilter ? `<span id="${this._id}_CNT" class="ftbl-filter-count"></span>` : ''}
+           ${this._descriptionFirst ? '' : descHtml}
          </div>`
       : '';
 
