@@ -18,7 +18,7 @@
    module-dialog.css
    Styles for the components implemented in module-dialog.js:
      FloriaDialog, FloriaTooltipDialog, FloriaContextMenu, FloriaTabs,
-     FloriaPromptDialog (inlined, no CSS here), FloriaAlert, FloriaAlertSimple.
+     FloriaPromptDialog (inlined, no CSS here), FloriaAlert, FloriaAlertSimple, FloriaToast.
 
    This file was split out of the host app's capsico.css so that
    module-dialog.js is a self-contained, drop-in-anywhere OSS component:
@@ -70,7 +70,14 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px 12px;
-  background: var(--modalTitleGradient, linear-gradient(#f9fbfd, var(--baseline-color-shade, #acb)));
+  /* Fallback (used whenever a host app hasn't defined --modalTitleGradient itself) is a soft, lightened mint
+     tint of the "Standard" plan card's own green accent (see .planAccent-green .planCardHeader further down
+     in this file / module-login.css's plan cards: linear-gradient(135deg, #4dd0a1, #26a69a)) -- that pairing
+     is vivid and meant for white text on a full-bleed card header, so it's toned WAY down here (mixed heavily
+     toward white, desaturated) rather than reused as-is: a dialog title bar is a much smaller, ever-present
+     UI chrome element sitting right above dark (#203040) text, so it needs to read as a gentle wash of color,
+     not a bright accent block. */
+  background: var(--modalTitleGradient, linear-gradient(#f9fbfd, #cdeee2));
   color: #203040;
   font-weight: 600;
   font-size: 1.75rem;
@@ -111,10 +118,10 @@
     position: absolute;
     top: 3em;
     bottom: 0px;
-    left: 0px;
-    right: 0px;
+    left: 1em;
+    right: .25em;
     background-color: #FFFFFF;
-    padding: 0.25em;
+    /* padding: 0.25em; */
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -374,7 +381,7 @@
   --tabs-text-muted      : color-mix(in oklab, var(--tabs-text) 82%, #FFF 18%);
   --tabs-accent          : var(--header-secondary, #1E3A5F);
   --tabs-accent-bg-hover : color-mix(in oklab, var(--tabs-accent) 8%, #FFF 100%);
-  --tabs-underline       : var(--modalTitleGradient, linear-gradient(#f9fbfd, var(--baseline-color-shade, #acb)));
+  --tabs-underline       : var(--modalTitleGradient, linear-gradient(#f9fbfd, #cdeee2));
   --tabs-border          : #e1e4e8;
   --tabs-indicator-height: 3px;
   --tabs-transition      : 180ms ease;
@@ -989,4 +996,110 @@
   font-size: 80%;
   text-align: center;
   margin-top: 10px;
+}
+
+/*********************************************************
+  Toast (FloriaToast)
+**********************************************************/
+/* One shared, non-interactive-except-for-its-children host per corner, stacking successive toasts.
+   pointer-events is re-enabled on the toast itself (not the host) so the host's own empty space
+   never blocks clicks on whatever is underneath it. */
+.floriaToastHost {
+  position: fixed;
+  z-index: 100000; /* above FloriaDialog's modalDialog (1000-based) and FloriaAlert's overlay */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  max-width: min(360px, 92vw);
+  pointer-events: none;
+}
+.floriaToastHost--top-right    { top: 0;    right: 0;  align-items: flex-end;   }
+.floriaToastHost--top-left     { top: 0;    left: 0;   align-items: flex-start; }
+.floriaToastHost--bottom-right { bottom: 0; right: 0;  align-items: flex-end;   flex-direction: column-reverse; }
+.floriaToastHost--bottom-left  { bottom: 0; left: 0;   align-items: flex-start; flex-direction: column-reverse; }
+
+.floriaToast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  border-left: 4px solid #5579c6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 12px 14px;
+  font-size: 90%;
+  color: #1a1f36;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.3s ease;
+}
+.floriaToastHost--bottom-right .floriaToast,
+.floriaToastHost--bottom-left  .floriaToast {
+  transform: translateY(8px);
+}
+.floriaToast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.floriaToast--info     { border-left-color: #5579c6; }
+.floriaToast--success  { border-left-color: #1c7c3f; }
+.floriaToast--warning  { border-left-color: #e0a400; }
+.floriaToast--error    { border-left-color: #d0362a; }
+
+.floriaToastIcon {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #5579c6;
+}
+.floriaToast--info    .floriaToastIcon { background: #5579c6; }
+.floriaToast--success .floriaToastIcon { background: #1c7c3f; }
+.floriaToast--warning .floriaToastIcon { background: #e0a400; }
+.floriaToast--error   .floriaToastIcon { background: #d0362a; }
+
+.floriaToastBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.floriaToastActions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.floriaToastAction {
+  border: 1px solid #5579c6;
+  background: #fff;
+  color: #5579c6;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 85%;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.floriaToastAction:hover {
+  background: #5579c6;
+  color: #fff;
+}
+
+.floriaToastClose {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: bold;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.floriaToastClose:hover {
+  color: #333;
 }

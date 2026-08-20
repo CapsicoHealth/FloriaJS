@@ -1189,4 +1189,110 @@ function _escFpd(str) {
   };
 
 
+ // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ // Floria Toast
+ // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * FloriaToast
+ * A small, non-blocking, self-dismissing notification — the "toast" counterpart to FloriaAlert's
+ * modal box. Mirrors this app's existing component conventions (see FloriaTooltipDialog/FloriaAlert
+ * just above): a plain constructor function, a lazily-created shared host element appended to
+ * document.body on first use (one stack per corner, like FloriaDialog's single "FLORIA_DLG_BG"),
+ * and a small imperative API (show()/hide()) rather than a class, for consistency with the rest of
+ * this file.
+ *
+ * Unlike FloriaAlert, a toast is NEVER modal: there is no overlay, the page underneath stays fully
+ * interactive, and several toasts can be visible/stacked at once (newest at the bottom of its
+ * corner's stack — see module-dialog.css's ".floriaToastHost" flex layout). Each toast auto-dismisses
+ * after `duration` ms unless `duration` is 0/false, in which case it stays until the user dismisses
+ * it (via the "×") or the caller calls hide() themselves — useful for an action-bearing toast the
+ * user is expected to actually click (e.g. "Top Up").
+ *
+ * @param {string} message   - HTML allowed. The toast's body content.
+ * @param {Object} [opts]
+ * @param {string} [opts.type]      - "info" (default) | "success" | "warning" | "error" — only
+ *                                    changes the accent color/icon (".floriaToast--<type>").
+ * @param {number} [opts.duration]  - Auto-dismiss delay in ms (default 5000). Pass 0 or false to
+ *                                    require an explicit dismissal (close button or hide()).
+ * @param {string} [opts.corner]   - Which screen corner to stack in: "top-right" (default),
+ *                                    "top-left", "bottom-right", "bottom-left".
+ * @param {Array}  [opts.actions]  - Optional array of { label, onClick } — rendered as small buttons;
+ *                                    onClick receives no arguments, and the toast is dismissed right
+ *                                    after (return false from onClick to keep it open instead).
+ *
+ * @example
+ *   new FloriaToast('Saved successfully.', { type: 'success' }).show();
+ *
+ *   new FloriaToast('You are running low on credits.', {
+ *     type: 'warning', duration: 0,
+ *     actions: [ { label: 'Top Up', onClick: () => FloriaLogin.PopupLogin.topUpCredits(productId) } ]
+ *   }).show();
+ */
+export function FloriaToast(message, opts)
+ {
+   var that = this;
+   opts = opts || {};
+   this._type     = opts.type || 'info';
+   this._duration = opts.duration === 0 || opts.duration === false ? 0 : (opts.duration || 5000);
+   this._corner   = opts.corner || 'top-right';
+   this._actions  = opts.actions || null;
+
+   // One shared host <div> per corner, appended once to document.body — successive toasts in the
+   // same corner simply append into it, exactly like FloriaDialog's single shared "FLORIA_DLG_BG".
+   var hostId = "FLORIA_TOAST_HOST_" + this._corner;
+   this._host = document.getElementById(hostId);
+   if (this._host == null)
+    {
+      this._host = document.createElement('div');
+      this._host.id = hostId;
+      this._host.className = "floriaToastHost floriaToastHost--" + this._corner;
+      document.body.appendChild(this._host);
+    }
+
+   this._el = document.createElement('div');
+   this._el.className = "floriaToast floriaToast--" + this._type;
+   this._el.innerHTML =
+       '<div class="floriaToastIcon"></div>'
+     + '<div class="floriaToastBody">' + message + '</div>'
+     + (this._actions == null ? '' : '<div class="floriaToastActions">'
+         + this._actions.map(function(a, i) { return '<button type="button" class="floriaToastAction" data-idx="' + i + '">' + a.label + '</button>'; }).join('')
+         + '</div>')
+     + '<div class="floriaToastClose" title="Dismiss">&times;</div>';
+
+   this._el.querySelector('.floriaToastClose').addEventListener('click', function() { that.hide(); });
+   if (this._actions != null)
+    this._el.querySelectorAll('.floriaToastAction').forEach(function(btn)
+     {
+       btn.addEventListener('click', function()
+        {
+          var action = that._actions[1 * btn.dataset.idx];
+          var keepOpen = action != null && action.onClick != null ? action.onClick() : undefined;
+          if (keepOpen !== false)
+           that.hide();
+        });
+     });
+
+   this.show = function()
+    {
+      that._host.appendChild(that._el);
+      setTimeout(function() { that._el.classList.add('show'); }, 10);
+      if (that._duration > 0)
+       that._hideTimer = setTimeout(function() { that.hide(); }, that._duration);
+      return that;
+    };
+
+   this.hide = function()
+    {
+      if (that._hideTimer != null)
+       { clearTimeout(that._hideTimer); that._hideTimer = null; }
+      that._el.classList.remove('show');
+      setTimeout(function()
+       {
+         if (that._el.parentNode != null)
+          that._el.parentNode.removeChild(that._el);
+       }, 300); // matches module-dialog.css's .floriaToast transition duration
+    };
+ };
+
 

@@ -945,7 +945,17 @@ function ComboBox(divId, elementId, values, placeholder, defaultValue, onChangeF
                +'</UL></SPAN>\n'
             ;
    
-   document.getElementById(divId).innerHTML = str;
+   {
+     let hostEl = document.getElementById(divId);
+     // Defense-in-depth: the host container can legitimately be gone by the time a caller builds/rebuilds a
+     // combo into it (e.g. a dialog/panel torn down while an async load that repaints it was still in
+     // flight -- see FloriaPayments.PlansDialog.UsageDashboard._paintFilterCombos's callers). Every other
+     // control in this file already no-ops on a missing container; ComboBox previously did not, and would
+     // throw here instead.
+     if (hostEl == null)
+      return;
+     hostEl.innerHTML = str;
+   }
    let valueElement = document.getElementById(Ids.fullId);
    let inputElement = document.getElementById(Ids.fullId+'_INPUT');
    let optionsDiv = document.getElementById(Ids.fullId+'_OPTIONS');

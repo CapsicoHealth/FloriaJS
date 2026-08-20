@@ -453,16 +453,22 @@ FloriaLogin.PopupLogin = {
     },
     
    /**
-    * Opens the "Plans / Billing" dialog. The actual UI (pricing table, currency selectors, cart/checkout, and
-    * billing history) lives in {@link FloriaPayments.PlansDialog}, which owns its own dialog instance rather
-    * than sharing this login/session popup: it's rarely-used code (sign-up, upgrade, top-up), so it's cheap to
-    * give it its own modal, and it keeps module-payments.js free of any compile-time dependency on this file.
-    * This wrapper only exists so existing call sites (app front-ends calling
-    * {@code FloriaLogin.PopupLogin.pickPlan()}) keep working unchanged.
+    * Opens the "Plans / Billing" dialog. The actual UI (pricing table, currency selectors, cart/checkout,
+    * Usage dashboard, and billing history) lives in {@link FloriaPayments.PlansDialog}, which owns its own
+    * dialog instance rather than sharing this login/session popup: it's rarely-used code (sign-up, upgrade,
+    * top-up), so it's cheap to give it its own modal, and it keeps module-payments.js free of any
+    * compile-time dependency on this file. This wrapper only exists so existing call sites (app front-ends
+    * calling {@code FloriaLogin.PopupLogin.pickPlan()}) keep working unchanged.
+    *
+    * @param genericPlanOnly see {@link FloriaPayments.PlansDialog#pickPlan}.
+    * @param initialTab optional case-insensitive tab to open on instead of the usual default: "usage",
+    *        "plans", or "billing". See {@link FloriaPayments.PlansDialog#pickPlan} for the full semantics,
+    *        including the smart zero-activity fallback to "plans" when "usage" is requested. The header
+    *        account menu's "Plans / Billing" entry (see main.js's populateListMenu) requests "usage".
     */
-   pickPlan: function(genericPlanOnly=false)
+   pickPlan: function(genericPlanOnly=false, initialTab=null)
     {
-      FloriaPayments.PlansDialog.pickPlan(FloriaLogin.Account.basePath, genericPlanOnly);
+      FloriaPayments.PlansDialog.pickPlan(FloriaLogin.Account.basePath, genericPlanOnly, null, initialTab);
     },
    /**
     * Opens the credit top-up popup for a product. See {@link FloriaPayments.PlansDialog#topUpCredits}.

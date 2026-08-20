@@ -344,3 +344,473 @@
   font-size: 0.88rem;
   color: #4a5560;
 }
+
+/* ── Credit balance gauge (FloriaPayments.CreditGauge, module-payments.js) ─────────────────
+   A slim, wide (5:1) embeddable meter, scoped to ONE product's wallet. Sizing is entirely
+   driven by the host DIV's own width (aspect-ratio keeps it from ever getting "tall"/square),
+   so it works whether the host gives it width:5em or width:20em. Colors are defined here via
+   CSS custom properties (with sensible fallbacks) rather than hardcoded in the widget's JS,
+   per this component's design: only the tier CLASS ("--low"/"--mid"/"--high") is decided in
+   JS. The fill itself is deliberately not a flat solid block -- a white top-to-transparent
+   "sheen" (see module-payments.js's _svgSkeleton) is layered over it so even a full, 100% bar
+   reads as a soft, glossy meter rather than a hard slab of color. */
+.creditGaugeHost {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 1;
+  line-height: 0; /* avoid extra inline-svg baseline gap */
+  user-select: none;
+}
+.creditGaugeHost--active {
+  cursor: pointer;
+}
+.creditGaugeHost--active:hover .creditGaugeTrack {
+  filter: brightness(0.97);
+}
+.creditGaugeHost--active:hover .creditGaugeFill {
+  filter: brightness(1.08);
+}
+.creditGaugeSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.creditGaugeTrack {
+  fill: var(--credit-gauge-track, #e7ebef);
+  stroke: var(--credit-gauge-track-border, #d7dde3);
+  stroke-width: 1px;
+}
+.creditGaugeFill {
+  transition: width 0.4s ease, fill 0.2s ease;
+}
+.creditGaugeFill--low {
+  fill: var(--credit-gauge-low, #d0362a);
+}
+.creditGaugeFill--mid {
+  fill: var(--credit-gauge-mid, #e0a400);
+}
+.creditGaugeFill--high {
+  fill: var(--credit-gauge-high, #2f9e5b);
+}
+.creditGaugeTicks line {
+  stroke: var(--credit-gauge-tick, rgba(255, 255, 255, 0.65));
+  stroke-width: 2px;
+}
+.creditGaugeLabel {
+  fill: var(--credit-gauge-label, #4a5560);
+  font-size: 17px;
+  font-family: inherit;
+}
+
+
+/* ── Plans tab (FloriaPayments.PlansDialog.paintPlans, module-payments.js) ────────────────────────────────
+   Each plan is an independent "pricing card" DIV (its own rounded corners + soft shadow) inside a CSS Grid
+   row, rather than the old shared <TABLE> where only the whole table's 4 outer corners could be rounded and
+   adjoining columns could never get a shadow of their own. Every card uses "grid-template-rows: subgrid"
+   against the row's own explicit tracks (Header / Features / Pricing / Discount) so those 4 sections line up
+   across cards even though feature-list length and pricing/discount text vary per plan -- no JS height-
+   measuring needed, the grid does it. grid-template-columns is set inline by paintPlans() itself (exactly
+   plans.length columns) so cards are never wrapped onto a second grid row, which would break the subgrid
+   alignment above. */
+
+/* Set (by paintPlans() itself) on the tab-panel/dialog-root DIV that directly hosts .planCardsRow -- lets a
+   short row of cards (e.g. only 2 plans, or a small dialog) center vertically in the available space instead
+   of pinning to the top with a big empty gap below, while a taller row (e.g. 4 plans with long feature lists
+   on a small screen) still just scrolls normally (this panel already has "overflow:auto" from its own
+   ".tabContainer > .tabBody > DIV.selected" rule -- flex + overflow:auto co-exist fine: justify-content:center
+   only has any effect once the content already fits). */
+.plansTabPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.planCardsRow {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  align-items: stretch;
+  gap: 1.75em;
+  width: 96%;
+  margin: 2.5vh auto;
+}
+.planCard {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
+  /* Deliberately NOT "overflow: hidden" here (unlike the old .planLayout <TABLE>, which needed it to clip its
+     <col>-tinted cell backgrounds to the table's own rounded corners): a hard overflow clip on the card would
+     also clip the currency dropdown (.floriaCombo UL, absolutely positioned -- see below) the moment it's
+     taller/wider than the card. Rounding is achieved instead by rounding .planCardHeader's own top corners to
+     match (its colored background is the only thing that ever touches the card's edge) -- see below. */
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.planCard:hover {
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.13);
+  transform: translateY(-2px);
+}
+.planCardHeader {
+  padding: 2.2vh 1vw 1.6vh 1vw;
+  text-align: center;
+  color: #fff;
+  border-radius: 16px 16px 0 0; /* matches .planCard's own top corners -- see the "overflow" note above */
+}
+.planAccent-blue   .planCardHeader { background: linear-gradient(135deg, #4da6ff, #1e88e5); }
+.planAccent-orange .planCardHeader { background: linear-gradient(135deg, #ffb74d, #fb8c00); }
+.planAccent-green  .planCardHeader { background: linear-gradient(135deg, #4dd0a1, #26a69a); }
+.planAccent-purple .planCardHeader { background: linear-gradient(135deg, #9a67ea, #6a1b9a); }
+.planCard .planLabel {
+  font-size: 150%;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.planCardFeatures, .planCardPricing {
+  padding: 1.6vh 1.2vw;
+  border-bottom: 1px solid #eee;
+}
+.planCardDiscount {
+  padding: 0.4vh 1.2vw 1.2vh 1.2vw;
+}
+.planSectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 105%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #667080;
+  margin-bottom: 1vh;
+}
+.planAccent-blue   .planSectionTitle { color: #1e88e5; }
+.planAccent-orange .planSectionTitle { color: #fb8c00; }
+.planAccent-green  .planSectionTitle { color: #26a69a; }
+.planAccent-purple .planSectionTitle { color: #6a1b9a; }
+.planCardFeatures UL {
+  margin: 0.5vh 0 0 0;
+  padding-left: 1.2em;
+}
+.planCardFeatures UL LI {
+  margin: 0 0 1vh 0;
+  line-height: 1.3;
+}
+.planCardPricing table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.planCardPricing table td {
+  padding: 0.5vh 0.3vw;
+  vertical-align: top;
+}
+/* The price itself: a real, obviously-clickable pill BUTTON (colored per the card's own accent) instead of a
+   plain underlined text link -- this IS the "buy" action, so it needs to read as one at a glance. */
+.planCardPricing A {
+  display: inline-block;
+  padding: 0.5vh 0.9vw;
+  margin: 0.2vh 0;
+  border-radius: 999px;
+  color: #fff !important;
+  font-weight: 700;
+  text-decoration: none !important;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.planCardPricing A:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  filter: brightness(1.06);
+}
+.planAccent-blue   .planCardPricing A { background: linear-gradient(135deg, #4da6ff, #1e88e5); }
+.planAccent-orange .planCardPricing A { background: linear-gradient(135deg, #ffb74d, #fb8c00); }
+.planAccent-green  .planCardPricing A { background: linear-gradient(135deg, #4dd0a1, #26a69a); }
+.planAccent-purple .planCardPricing A { background: linear-gradient(135deg, #9a67ea, #6a1b9a); }
+/* The currency picker: a small pill/chip (border + light fill + a down-caret) rather than bare flag+text, so
+   it visibly reads as its own separate, clickable control rather than part of the "Pricing" heading. */
+.planCardPricing .currency {
+  font-weight: normal;
+  text-transform: none;
+  font-size: 80%;
+}
+.planCardPricing .currency .floriaCombo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.2em 0.6em;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  background: #f5f7fa;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.planCardPricing .currency .floriaCombo:hover {
+  background: #eaeff5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.planCardPricing .currency .floriaCombo SPAN[contenteditable]::after {
+  content: "\25BE"; /* small down-caret, hinting there's a dropdown here */
+  margin-left: 0.3em;
+  opacity: 0.55;
+  font-size: 85%;
+}
+/* Truncation fix: .floriaCombo UL (the dropdown itself) is "position: absolute" against its nearest
+   positioned ancestor and was being hard-clipped by .planCard's own "overflow: hidden" (removed above) --
+   without that, only the LAST card's dropdown can still run past the dialog's own right edge (it opens
+   left-aligned, growing rightward, by default), so that one specific card flips it to grow leftward instead. */
+.planCardsRow .planCard:last-child .currency .floriaCombo UL {
+  left: auto;
+  right: 0;
+}
+
+/* ── Billing History tab (FloriaPayments.PlansDialog.paintBillingHistory, module-payments.js) ────────────
+   Top-center row of live wallet gauges (one per distinct pre-paid credit product the user holds), sitting
+   above the standard FloriaTable order/subscription history. */
+.billingWalletRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5em;
+  margin: 0.5em 0 1.25em 0;
+}
+.billingWalletCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  width: 17em;
+}
+.billingWalletLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5560;
+  text-align: center;
+}
+.billingWalletGauge {
+  width: 100%;
+}
+.billingHistoryTableHost {
+  height: 55vh;
+}
+
+/* ── Usage Dashboard (FloriaPayments.PlansDialog.UsageDashboard, module-payments.js) ─────────────────────
+   The "Usage" tab of the Plans/Billing popup: a friendly, at-a-glance cost/activity dashboard for the
+   signed-in user's own pre-paid credit wallet. Deliberately uses a softer, more inviting palette (the same
+   family of accent colors used elsewhere in this file/module-login.js's login gradient) than the denser,
+   data-table-heavy admin dashboards (e.g. CapsicoWebDynamic's activities.jsp) -- this is end-user-facing. */
+.usageDash {
+  padding: 0.25em 0.75em 1.25em 0.75em;
+}
+
+.usageDashToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em 0.9em;
+  margin-bottom: 1em;
+  padding: 0.6em 0.85em;
+  background-color: #f7f9fc;
+  border: 1px solid #e4e7eb;
+  border-radius: 10px;
+}
+.usageDashToolbar label {
+  font-size: 0.82rem;
+  color: #4a5560;
+}
+.usageDashSelect {
+  padding: 0.35em 0.5em;
+  border: 1px solid #d0d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background-color: #fff;
+}
+.usageDashCombo {
+  min-width: 170px;
+}
+.usageDashComboWide {
+  min-width: 220px;
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+.usageDashReset {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--button-primary, #2E6690);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.usageDashReset:hover {
+  text-decoration: underline;
+}
+.usageDashExportBtn {
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* Summary cards */
+.usageDashCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.9em;
+  margin-bottom: 1.25em;
+}
+.usageDashCard {
+  padding: 0.9em 1em;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef5ff 0%, #f2fbf7 100%);
+  border: 1px solid #e1ecf7;
+  text-align: center;
+}
+.usageDashCardValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #223344;
+  line-height: 1.2;
+}
+.usageDashCardLabel {
+  font-size: 0.78rem;
+  color: #6b7580;
+  margin-top: 0.25em;
+}
+
+/* Trend + pie row */
+.usageDashChartsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25em;
+  margin-bottom: 0.5em;
+}
+.usageDashTrendCol {
+  flex: 2 1 420px;
+}
+.usageDashPieCol {
+  flex: 1 1 260px;
+}
+
+.usageDashSectionTitle {
+  margin: 1.5em 0 0.6em 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #203040;
+}
+
+/* Cost Hot Spots — one card per reference "Type" (e.g. Agents / Flows / Documents) that is actually
+   present in the window; a type the user never used simply gets no card at all (see the front-end docs in
+   module-payments.js), so a light user of only one type never sees a wall of zeros. */
+.usageDashHotspotsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1em;
+  margin-bottom: 0.5em;
+}
+.usageDashHotspotCard {
+  border: 1px solid #e4e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #fff;
+}
+.usageDashHotspotCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75em;
+  padding: 0.6em 0.9em;
+  background: linear-gradient(90deg, #7ab0f6, #75dbb8);
+  color: #fff;
+}
+.usageDashHotspotCardTitle {
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usageDashHotspotCardTotal {
+  font-size: 0.8rem;
+  opacity: 0.95;
+  white-space: nowrap;
+}
+.usageDashHotspotList {
+  padding: 0.4em 0.75em 0.6em 0.75em;
+}
+.usageDashHotspotItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.45em 0.15em;
+  border-bottom: 1px solid #f0f2f5;
+  cursor: pointer;
+}
+.usageDashHotspotItem:last-child {
+  border-bottom: none;
+}
+.usageDashHotspotItem:hover {
+  background-color: #f7f9fc;
+}
+.usageDashHotspotRank {
+  flex: 0 0 auto;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  background-color: #eef2f6;
+  color: #4a5560;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.usageDashHotspotBody {
+  flex: 1 1 auto;
+  min-width: 0; /* required for the name's ellipsis truncation below to actually kick in inside a flex child */
+}
+.usageDashHotspotName {
+  font-size: 0.85rem;
+  color: #2c3440;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usageDashHotspotBar {
+  height: 5px;
+  border-radius: 3px;
+  background-color: #eef2f6;
+  margin-top: 0.3em;
+  overflow: hidden;
+}
+.usageDashHotspotBarFill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #7ab0f6, #4c8adb);
+}
+.usageDashHotspotValue {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #223344;
+  white-space: nowrap;
+}
+
+.usageDashEmpty {
+  color: #8a94a0;
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 1em 0;
+}
+
+/* Collapsible full-activity table -- collapsed by default so the dashboard reads as "at a glance"
+   rather than a wall of data; anyone who wants the raw drill-down can expand it. */
+.usageDashDetailsToggle {
+  margin: 0.5em 0 0.75em 0;
+}
+.usageDashDetailsToggle a {
+  font-size: 0.85rem;
+  color: var(--button-primary, #2E6690);
+  text-decoration: none;
+  cursor: pointer;
+}
+.usageDashDetailsToggle a:hover {
+  text-decoration: underline;
+}
