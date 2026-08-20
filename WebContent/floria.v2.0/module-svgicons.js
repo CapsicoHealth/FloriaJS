@@ -89,11 +89,16 @@ FloriaSVGIcons.ICONS.BOOKMARK_FILLED = (title, color=FloriaSVGIcons.COLORS.prima
     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
 `, title, color, size, fill);
 
-// DOCLIBRARY (open book — document library / management)
+// DOCLIBRARY (document folder — document library / management)
 FloriaSVGIcons.ICONS.DOCLIBRARY = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
-  <path d="M2 5.5c2-1 5-1 7 .5v13c-2-1.5-5-1.5-7-.5z"/>
-  <path d="M22 5.5c-2-1-5-1-7 .5v13c2-1.5 5-1.5 7-.5z"/>
-  <path d="M9 6v13"/>
+  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+`, title, color, size);
+
+// UPLOAD (flat tray line + up arrow — classic "upload" visual)
+FloriaSVGIcons.ICONS.UPLOAD = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
+  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+  <polyline points="17 8 12 3 7 8"/>
+  <line x1="12" y1="3" x2="12" y2="15"/>
 `, title, color, size);
 
 // DASHBOARD (rising trend line with data points on axes — activity / processing dashboard)

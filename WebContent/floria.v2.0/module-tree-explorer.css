@@ -338,6 +338,10 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  /* See the matching comment in module-content-explorer.css's .cex-icon-btn: must be explicit to
+     counteract module-forms2.css's global "button { padding: 6px 16px; }" reset, which otherwise
+     squishes this fixed 30x30 box's content area to nothing (box-sizing:border-box). */
+  padding: 0;
   border: 1px solid #e1e4e8;
   border-radius: 6px;
   background: #f3f4f6;
@@ -352,6 +356,19 @@
   border-color: #4f46e5;
 }
 .tex-icon-btn svg { pointer-events: none; }
+
+/* See the matching comment in module-content-explorer.css: these icons are drawn via SVG
+   presentation attributes (stroke="currentColor"), which are the weakest declarations in the
+   CSS cascade and can be silently overridden by any unrelated, unscoped "svg"/"path"/"line"/
+   "circle"/"polyline"/"rect" rule elsewhere on the host page. Re-assert via real CSS here. */
+.tex-icon-btn svg,
+.tex-icon-btn svg *,
+.tex-context-menu-item svg,
+.tex-context-menu-item svg * {
+  fill: none;
+  stroke: currentColor;
+}
+
 
 .tex-icon-btn.tex-trash-active {
   background: #fef3c7;

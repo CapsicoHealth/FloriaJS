@@ -87,11 +87,20 @@ FloriaHelp.init = function(helpItemsOrDef, actionElementId, tooltipLabel, _testE
       let container = document.getElementById(actionElementId);
       if (container != null)
        {
-         let str = container.innerHTML;
-         container.innerHTML = '<IMG id="'+actionElementId+'_HELP" src="/static/img/action-marker.gif" title="'+(tooltipLabel||helpStrings.tooltips.stepByStep)+'">'+str;
-         FloriaDOM.addEvent(actionElementId+'_HELP', "click", function(e, event, target) {
-           FloriaHelp.highlightVisibleElements();
-         });
+         // NOTE: deliberately insertAdjacentHTML() rather than read+rewrite innerHTML: some other,
+         // app-specific module may independently inject its OWN action icon into this same
+         // container, in either call order (e.g. a "product tour"/walkthrough module living
+         // outside of Floria). Rewriting innerHTML wholesale would re-parse/destroy any such
+         // sibling icon's DOM node - and the click listener attached to it - regardless of which
+         // one ran first. insertAdjacentHTML() only inserts this new node, leaving existing
+         // children (and their listeners) untouched.
+         if (document.getElementById(actionElementId+'_HELP') == null)
+          {
+            container.insertAdjacentHTML('afterbegin', '<IMG id="'+actionElementId+'_HELP" src="/static/img/action-marker.gif" title="'+(tooltipLabel||helpStrings.tooltips.stepByStep)+'">');
+            FloriaDOM.addEvent(actionElementId+'_HELP', "click", function(e, event, target) {
+              FloriaHelp.highlightVisibleElements();
+            });
+          }
        }
     }
  };
@@ -118,7 +127,7 @@ function clearRing(e)
 // paint their entire box - including any inline outline - through that filter, which would visibly distort
 // the ring's color. For such elements we can't use an inline outline on the element itself; instead we fall
 // back to drawing the ring as a border on the (already separately-tracked, filter-free) badge overlay sibling,
-// reusing the existing ".floriaTourOverlay" CSS border/radius rather than the inline outline.
+// reusing the existing ".floriaHelpOverlay" CSS border/radius rather than the inline outline.
 function hasFilter(e)
  {
    let f = getComputedStyle(e).filter;
@@ -304,9 +313,7 @@ FloriaHelp.highlightVisibleElements = function()
    for (let i = 0; i < elementsVisited.length; ++i)
     {
       let e = elementsVisited[i];
-      // Note: "floriaTourOverlay" CSS class name is kept as-is for now (capsico.css split/rename is a
-      // separate, later effort) so the badge's existing styling keeps working without any CSS changes.
-      let overlay = FloriaDOM.createElementOverlay(e, "floriaTourOverlay", null, i+1);
+      let overlay = FloriaDOM.createElementOverlay(e, "floriaHelpOverlay", null, i+1);
       let useOverlayRing = hasFilter(e);
       // Normal case: cancel the overlay's CSS border and draw the ring inline on the element instead.
       // Filtered targets (e.g. a colorized monochrome icon) keep the overlay's own (filter-free) CSS

@@ -127,6 +127,13 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  /* Must be explicit: module-forms2.css's global "button { padding: 6px 16px; }" reset (added in
+     a recent FloriaForms/FloriaControls redesign) would otherwise apply here too, and combined
+     with box-sizing:border-box (see .cex-root * above) it consumes almost the entire fixed
+     30x30 box (30 - 2*16 = -2px content width), squishing the 16x16 icon SVG down to nothing —
+     it's still in the DOM but effectively invisible. Same fix applied to .tex-icon-btn
+     (module-tree-explorer.css) and already present on .lp-icon-btn (landing-cards.css). */
+  padding: 0;
   border: 1px solid #e1e4e8;
   border-radius: 6px;
   background: #f3f4f6;
@@ -160,6 +167,27 @@
 .cex-icon-btn svg {
   pointer-events: none;
 }
+
+/* The toolbar/menu icons above are drawn via SVG *presentation attributes*
+   (stroke="currentColor", fill="none") baked into the raw markup in
+   module-content-explorer.js. Presentation attributes are the WEAKEST
+   declarations in the entire CSS cascade — any unrelated stylesheet loaded on
+   the host page that happens to declare a plain, unscoped rule for "svg",
+   "path", "line", "circle", "polyline" or "rect" (e.g. a chart/graph library
+   reset such as "rect { fill: transparent }") will silently win over them and
+   render these icons invisible, even though they're still present in the DOM.
+   Re-assert fill/stroke here via real, class-scoped CSS so they always take
+   priority regardless of what else is loaded on the page. */
+.cex-icon-btn svg,
+.cex-icon-btn svg *,
+.cex-back-btn svg,
+.cex-back-btn svg *,
+.cex-context-menu-item svg,
+.cex-context-menu-item svg * {
+  fill: none;
+  stroke: currentColor;
+}
+
 
 /* Sort toggle label — hide at narrow widths to save space */
 .cex-sort-label {
