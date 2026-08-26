@@ -110,3 +110,13 @@ FloriaSVGIcons.ICONS.DASHBOARD = (title, color=FloriaSVGIcons.COLORS.gray, size)
   <circle cx="14" cy="13.5" r="1.1" fill="${color}"/>
   <circle cx="20" cy="6" r="1.1" fill="${color}"/>
 `, title, color, size);
+
+// STETHOSCOPE (a doctor's stethoscope — used to represent a clinical/healthcare "encounter",
+// far more recognizable at small icon sizes than a literal physician-and-patient illustration)
+FloriaSVGIcons.ICONS.STETHOSCOPE = (title, color=FloriaSVGIcons.COLORS.gray, size) => svgWrapper(`
+  <path d="M11 2v2"/>
+  <path d="M5 2v2"/>
+  <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/>
+  <path d="M8 15a6 6 0 0 0 12 0v-3"/>
+  <circle cx="20" cy="10" r="2"/>
+`, title, color, size);

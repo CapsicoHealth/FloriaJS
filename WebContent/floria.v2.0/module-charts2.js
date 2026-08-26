@@ -129,6 +129,11 @@ FloriaCharts2.geoChart = function(containerDivId, latitude,longitude,zoomlevel)
             maxZoom: 100,
             id: 'mapbox.light'
         }).addTo(this._map);
+        // Belt-and-suspenders for the same 0x0-container-at-init issue handled in addChoropleth:
+        // a caller that never loads a choropleth dataset (so fitMap() is never reached) would
+        // otherwise be stuck with whatever bogus size Leaflet captured at construction time.
+        var that = this;
+        requestAnimationFrame(function() { that._map.invalidateSize(false); });
     }
     this.addResetView= function() {
         if (control!=null)
@@ -188,7 +193,17 @@ FloriaCharts2.geoChart = function(containerDivId, latitude,longitude,zoomlevel)
     {
       this._tooltipHandlerFunc = tooltipHandlerFunc || defaultTooltipHandlerFunc;
     };
-    
+
+   // Optional click-through hook (e.g. Quick Insights' "click a state to drill into its
+   // counties"). Called with (feature) for whichever choropleth area was clicked; the caller
+   // is responsible for checking feature.data (only set for areas present in the dataset) if
+   // it only wants to react to areas that actually carry a value.
+   this._clickHandlerFunc = null;
+   this.setClickHandlerFunc = function(clickHandlerFunc)
+    {
+      this._clickHandlerFunc = clickHandlerFunc || null;
+    };
+
    this.getStateName = function(feature)
     {
       return feature.properties.ste_name||feature.properties?.s?.[1];
@@ -286,26 +301,31 @@ FloriaCharts2.geoChart = function(containerDivId, latitude,longitude,zoomlevel)
         legend.onAdd = function (map) {
            let quantileSize = (counts.maxVal-counts.minVal)/quantiles;
             var div = DomUtil.create('div', 'info legend');
-            var diff=Math.floor((counts.maxVal-counts.minVal)/4);
-            if (diff<1){
+            if (Math.abs(quantileSize)<1){
                 div.innerHTML +=
             '<i style="background:' + "hsl("+100+", 100%, 50%)" + '"></i> ' +
             (counts.minVal) + '&ndash;' + counts.maxVal+ '<br>';
-            div.innerHTML +=
-                '<i style="background:' +"hsl("+Math.floor(quantiles-((counts.maxVal-counts.minVal)/quantileSize))*100/quantiles +", 100%, 50%)" + '"></i> ' +
-                (counts.maxVal + '+');
             }
             else{
-                 // loop through our density intervals and generate a label with a colored square for each interval
-                for (var i = 0; i<=4; i++) {
-                    if (counts.minVal+i*diff<=counts.maxVal){
-                    let h=Math.floor(quantiles-(((i+0.5)*diff)/quantileSize))*100/quantiles;
+                 // Loop through OUR OWN `quantiles` bands (NOT a hardcoded 4/5), using the exact
+                 // same quantileSize/hue formula as tagDatasetChoroplethColor above. Previously this
+                 // hardcoded a fixed 4-step "diff" (range/4) regardless of the `quantiles` the caller
+                 // actually asked for, while the hue itself was computed against quantileSize
+                 // (range/quantiles). Those two only happened to agree when quantiles===5; for any
+                 // other value (or even 5, exactly, due to rounding) the bucket boundaries and the
+                 // hues desynced, skipping hues and even going negative/out of the 0-100 range —
+                 // which is exactly the nonsensical legend reported (80,60,20,0,-20: skips 40,
+                 // dips negative).
+                let n = Math.round(Math.abs(quantiles));
+                for (var i = 0; i<n; i++) {
+                    let lo = counts.minVal + i*quantileSize;
+                    let hi = counts.minVal + (i+1)*quantileSize;
+                    let h = Math.floor(quantiles-(i+0.5))*100/quantiles;
                     if (quantiles<0)
-                        h=Math.floor(((i+0.5)*diff)/quantileSize)*100/quantiles;
+                        h=Math.floor(i+0.5)*100/quantiles;
                     div.innerHTML +=
                 '<i style="background:' + "hsl("+h+", 100%, 50%)" + '"></i> ' +
-                (counts.minVal+i*diff) + ((counts.minVal+(i+1)*diff)<=counts.maxVal ? '&ndash;' + (counts.minVal+(i+1)*diff) + '<br>' : '+');
-                    }
+                Math.round(lo) + (i<n-1 ? '&ndash;' + Math.round(hi) + '<br>' : '+');
                   }
             }
             return div;
@@ -365,8 +385,19 @@ FloriaCharts2.geoChart = function(containerDivId, latitude,longitude,zoomlevel)
                                 ,onEachFeature: function (feature, layer) { // called for every layer for every feature.
                                    layer.myTag = that._containerDivId;
                                    layer.bindTooltip(feature?.data?.tooltip || that._tooltipHandlerFunc(feature) || defaultTooltipHandlerFunc(feature));
+                                   if (that._clickHandlerFunc != null)
+                                    layer.on('click', function() { that._clickHandlerFunc(feature); });
                                 }}).addTo(that._map);
                
+                       // Leaflet computes its internal pixel origin from the container's size at the
+                       // moment the map was created (see FloriaCharts2.geoChart above). When that
+                       // container is inserted and sized by CSS grid/flex in the very same synchronous
+                       // tick (as every Quick Insights mini-dashboard does), the browser has not
+                       // necessarily reflowed yet, so Leaflet can see a 0x0 (or stale) container and
+                       // ends up rendering a fully-zoomed-out "whole world" view no matter what zoom/
+                       // fitBounds is requested afterwards. invalidateSize() forces Leaflet to re-read
+                       // the container's real, laid-out size right before we fit to the data's bounds.
+                       that._map.invalidateSize(false);
                        that.fitMap(result.bounds);
                        that._addLegend(quantiles,result.counts)
                     }
@@ -812,6 +843,14 @@ FloriaCharts2.Chart = function(divId)
                          ,labelFunc /*f(value, index, ticks)*/
                          ,min, max
                          ,vertical
+                         ,scaleType /*'linear' | 'category' | 'time' | 'logarithmic' | ... — Chart.js scale
+                                      type override. Chart.js's own per-chart-type default (e.g. a 'line'
+                                      chart defaults its X scale to 'category') otherwise applies, which
+                                      silently mis-positions numeric {x,y} point data — a 'category' scale
+                                      places points by looking their x up in a top-level `labels` array
+                                      (which this component never sets), so with no match every point
+                                      collapses onto the same first tick instead of spreading out by year.
+                                      Pass 'linear' explicitly whenever x is a real number (e.g. a year). */
                          )
     {
       let axis = {
@@ -826,6 +865,7 @@ FloriaCharts2.Chart = function(divId)
         ,min: min
         ,max: max
         ,vertical: vertical
+        ,type: scaleType || undefined
        };
      if (type == 'X')
       this._xAxis = axis;
