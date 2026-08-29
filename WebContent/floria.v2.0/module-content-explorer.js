@@ -692,7 +692,7 @@ export class ContentExplorer {
     }).catch(err => {
       const body = dlg.querySelector('.cex-props-body');
       body.classList.remove('cex-props-loading');
-      body.innerHTML = `<span style="color:#dc2626">Failed to load properties.</span>`;
+      body.innerHTML = `<span style="color:var(--cex-danger)">Failed to load properties.</span>`;
       console.error('ContentExplorer: onFolderProperties failed', err);
     });
   }

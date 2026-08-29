@@ -20,7 +20,46 @@
    table component.
    All rules are scoped under .ftbl-root so multiple instances
    on the same page never collide.
+
+   THEMING / OVERRIDE CONTRACT: every color below is read through one of the
+   "--ftbl-*" custom properties declared in the :root block right below (same
+   convention as module-forms2.css's "--floria-forms-*") — this component's
+   public theming surface. A host app that wants to re-skin FloriaTable (e.g.
+   for a dark page) only needs to redeclare any subset of these at :root, or
+   on any ancestor of the mounted table — see e.g. flow-studio/styles.css's
+   "--ftbl-*" block. Fallback values baked into every var(...) call keep this
+   file rendering sensibly with no host override present. The pre-existing
+   "--header-color"/"--header-color-hover"/"--header-text-color"/
+   "--hovered-color"/"--selected-color" tokens (normally supplied by
+   capsico.css, and NOT prefixed "--ftbl-") are a separate, older, wider
+   platform-level surface shared with other components (e.g. FloriaControls'
+   ComboBox) — left as-is here, re-themed by a host app the same way it
+   already re-themes any other platform-wide widget.
    ============================================================ */
+:root {
+  --ftbl-text:               #1a1f36;
+  --ftbl-text-muted:         #6b7280;
+  --ftbl-text-faint:         #9ca3af;
+  --ftbl-td-text:            #374151;
+  --ftbl-bg:                 #fff;
+  --ftbl-shadow:             0 1px 3px rgba(79, 70, 229, 0.07), 0 4px 14px rgba(79, 70, 229, 0.05);
+  --ftbl-input-border:       #d1d5db;
+  --ftbl-input-bg:           #f9fafb;
+  --ftbl-input-focus-border: #4f46e5;
+  --ftbl-input-focus-shadow: rgba(79, 70, 229, 0.10);
+  --ftbl-body-border:        #EEE;
+  --ftbl-body-shadow:        0 1px 3px hsl(274 100% 23% / 0.06), 0 4px 12px hsl(274 100% 23% / 0.04);
+  --ftbl-header-border:      #ddd6fe;
+  --ftbl-accent:             #4f46e5;
+  --ftbl-row-border:         #e5e7eb;
+  --ftbl-row-hover:          rgba(79, 70, 229, 0.04);
+  --ftbl-row-clickable-hover: rgba(79, 70, 229, 0.08);
+  --ftbl-row-selected-bg:      rgba(13, 148, 136, 0.06);
+  --ftbl-row-selected-hover-bg: rgba(13, 148, 136, 0.10);
+  --ftbl-row-selected-border:  #0d9488;
+  --ftbl-bool-true:          #16a34a;
+  --ftbl-bool-false:         #dc2626;
+}
 
 /* ── Root container ─────────────────────────────────────────────────────── */
 .ftbl-root {
@@ -30,11 +69,11 @@
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
-  color: #1a1f36;
+  color: var(--ftbl-text);
   box-sizing: border-box;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.07), 0 4px 14px rgba(79, 70, 229, 0.05);
-  background: #fff;
+  box-shadow: var(--ftbl-shadow);
+  background: var(--ftbl-bg);
 }
 
 .ftbl-root *, .ftbl-root *::before, .ftbl-root *::after {
@@ -47,7 +86,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #fff;
+  background: var(--ftbl-bg);
   /*! border-bottom: 1px solid #e5e7eb; */
   border-radius: 0.75rem 0.75rem 0 0;
   flex-shrink: 0;
@@ -57,17 +96,17 @@
   flex: 0 1 24em;
   min-width: 24em;
   padding: 6px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--ftbl-input-border);
   border-radius: 0.5rem;
   font-size: 13px;
   outline: none;
-  background: #f9fafb;
+  background: var(--ftbl-input-bg);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .ftbl-filter-input:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.10);
-  background: #fff;
+  border-color: var(--ftbl-input-focus-border);
+  box-shadow: 0 0 0 3px var(--ftbl-input-focus-shadow);
+  background: var(--ftbl-bg);
 }
 
 /* Optional blurb rendered as a sibling flex-item in the filter bar (see FloriaTable's
@@ -83,14 +122,14 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #6b7280;
+  color: var(--ftbl-text-muted);
   font-size: 13px;
 }
 
 
 .ftbl-filter-count {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ftbl-text-muted);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -101,8 +140,8 @@
   overflow-y: auto;
   overflow-x: auto;
   border-radius: 0.5rem;  /* clip the last row's corners to match the card */
-  border: 1px solid #EEE;
-  box-shadow: 0 1px 3px hsl(274 100% 23% / 0.06), 0 4px 12px hsl(274 100% 23% / 0.04);
+  border: 1px solid var(--ftbl-body-border);
+  box-shadow: var(--ftbl-body-shadow);
 }
 
 /* ── Table ──────────────────────────────────────────────────────────────── */
@@ -128,7 +167,7 @@
 .ftbl-table thead th {
   padding: 10px 12px;
   background: var(--header-color);
-  border-bottom: 1px solid #ddd6fe;
+  border-bottom: 1px solid var(--ftbl-header-border);
   font-weight: 600;
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -151,7 +190,7 @@
 }
 .ftbl-table thead th.ftbl-sortable:hover {
   background: var(--header-color-hover);
-  color: #4f46e5;
+  color: var(--ftbl-accent);
 }
 .ftbl-table thead th.ftbl-sortable:hover .ftbl-sort-icon {
   opacity: 1;
@@ -188,17 +227,17 @@
 th.ftbl-sort-asc  .ftbl-sort-icon,
 th.ftbl-sort-desc .ftbl-sort-icon {
   opacity: 1;
-  color: #4f46e5;
+  color: var(--ftbl-accent);
 }
 
 /* ── Body rows ──────────────────────────────────────────────────────────── */
 .ftbl-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--ftbl-row-border);
   transition: background 0.12s;
 }
 
 .ftbl-table tbody tr:hover {
-  background: rgba(79, 70, 229, 0.04);
+  background: var(--ftbl-row-hover);
 }
 
 /* Row-clickable mode (exactly one column has an onClickHandler) — the whole row shows a
@@ -208,7 +247,7 @@ th.ftbl-sort-desc .ftbl-sort-icon {
   cursor: pointer;
 }
 .ftbl-table tbody tr.ftbl-row-clickable:hover {
-  background: rgba(79, 70, 229, 0.08);
+  background: var(--ftbl-row-clickable-hover);
 }
 
 /* Selected row (the last row whose click-column handler was invoked) — a subtle emerald/teal
@@ -218,20 +257,20 @@ th.ftbl-sort-desc .ftbl-sort-icon {
    unreliable across browsers under border-collapse:collapse), with padding trimmed to match so
    the accent doesn't shift row content. */
 .ftbl-table tbody tr.ftbl-row-selected {
-  background: rgba(13, 148, 136, 0.06);
+  background: var(--ftbl-row-selected-bg);
 }
 .ftbl-table tbody tr.ftbl-row-selected:hover {
-  background: rgba(13, 148, 136, 0.10);
+  background: var(--ftbl-row-selected-hover-bg);
 }
 .ftbl-table tbody tr.ftbl-row-selected > td:first-child {
-  border-left: 4px solid #0d9488;
+  border-left: 4px solid var(--ftbl-row-selected-border);
   padding-left: 8px;
 }
 
 .ftbl-table tbody td {
   padding: 9px 12px;
   vertical-align: top;
-  color: #374151;
+  color: var(--ftbl-td-text);
   font-size: 1.05rem;
 }
 
@@ -244,13 +283,13 @@ th.ftbl-sort-desc .ftbl-sort-icon {
 .ftbl-empty {
   text-align: center;
   padding: 32px 16px;
-  color: #9ca3af;
+  color: var(--ftbl-text-faint);
   font-size: 13px;
 }
 
 /* ── Boolean cell ───────────────────────────────────────────────────────── */
-.ftbl-bool-true  { color: #16a34a; font-size: 15px; }
-.ftbl-bool-false { color: #dc2626; font-size: 15px; }
+.ftbl-bool-true  { color: var(--ftbl-bool-true); font-size: 15px; }
+.ftbl-bool-false { color: var(--ftbl-bool-false); font-size: 15px; }
 
 /* ── Wide-table (horizontal scroll) ────────────────────────────────────── */
 .ftbl-body.ftbl-wide {

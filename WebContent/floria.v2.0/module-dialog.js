@@ -537,6 +537,102 @@ export function FloriaContextMenu(elementId, options, cssPostfix, callbackFunc, 
 
 
 /**
+ A small, self-contained "quick guide" popover: an anchored, dismissable panel whose contents are an
+ HTML fragment fetched from a URL. Originally FloriaTabs' private "(?)" help implementation, now
+ factored out so the exact same help content and chrome can be attached to ANY anchor element — a
+ host application that supplies its own navigation (and therefore renders no FloriaTabs header strip,
+ or suppresses its help icon) can still surface the same guide from wherever it makes sense in its
+ own layout, without duplicating the fetch/cache/dismiss logic or drifting from FloriaTabs' look.
+
+ anchorElementId: id of the ALREADY-RENDERED element the popover attaches to and points at. Note that
+    this component does NOT create, style or wire that anchor — the caller owns it (FloriaTabs, for
+    one, renders a ".tabHelpIcon" SPAN and calls show() from its own toggle-safe click handler). The
+    element only has to exist by the time show() is first called, not at construction time.
+
+ helpUrl: the fragment to display. Fetched at most once PER PAGE LOAD across every FloriaHelpPopover
+    and FloriaTabs referencing the same URL (see __TABS_HELP_CACHE), so repeated opens — and several
+    popovers sharing one guide — are instant and cost a single request. Cache-busting, if wanted, is
+    the caller's business: vary the URL (e.g. append a build timestamp) and it becomes a distinct
+    cache key.
+
+ tooltipClass (optional): extra class on the underlying FloriaTooltipDialog, defaulting to
+    "tabHelpTooltip" so anything using this inherits FloriaTabs' help styling for free. Pass your own
+    only to skin a popover differently; the inner ".tabHelpPopover"/".tabHelpClose"/".tabHelpBody"
+    structure is fixed either way.
+
+ Behavior: content renders immediately from cache (or a "Loading…" placeholder while the first fetch
+ is in flight, which is then swapped in place — the popover never blocks on the network before
+ appearing), and can be dismissed via its own "×" or by clicking anywhere outside it. A failed fetch
+ degrades to an inline apology rather than an empty box, and is deliberately NOT cached, so simply
+ reopening the popover retries.
+*/
+export function FloriaHelpPopover(anchorElementId, helpUrl, tooltipClass)
+ {
+   var that = this;
+   this._helpUrl = helpUrl;
+   this._dialog = null;
+
+   this._render = function(html)
+    {
+      that._dialog.setContents(
+          '<div class="tabHelpPopover">'
+        +   '<span class="tabHelpClose" title="Close">&times;</span>'
+        +   '<div class="tabHelpBody">'+html+'</div>'
+        + '</div>');
+      var closeEl = that._dialog.getTooltipDiv().querySelector(".tabHelpClose");
+      if (closeEl != null)
+       closeEl.onclick = function(e) { e.preventDefault(); e.stopPropagation(); that._dialog.hide(); };
+    };
+
+   // Lazily creates (on first use) and (re)opens the popover anchored to anchorElementId, rendering
+   // helpUrl's HTML from cache when it has already been fetched once this page load.
+   this.show = function()
+    {
+      if (that._dialog == null)
+       {
+         that._dialog = new FloriaTooltipDialog(anchorElementId, "", true, true, tooltipClass || "tabHelpTooltip");
+         that._dialog.setSize("min(560px, 92vw)", "min(70vh, 620px)");
+         // Click-outside-to-close: only acts while THIS popover is actually shown, and ignores clicks
+         // on the popover itself or on the anchor that opened it (whose own handler is expected to be
+         // toggle-safe, so a click there doesn't get double-handled into close-then-reopen).
+         document.addEventListener("click", function(ev)
+          {
+            var tt = that._dialog?.getTooltipDiv();
+            if (tt == null || tt.hasAttribute("show-popper") == false)
+             return;
+            var anchor = document.getElementById(anchorElementId);
+            if (tt.contains(ev.target) || anchor === ev.target || (anchor != null && anchor.contains(ev.target)))
+             return;
+            that._dialog.hide();
+          }, true);
+       }
+
+      that._render(__TABS_HELP_CACHE[that._helpUrl] || '<div class="tabHelpLoading">Loading…</div>');
+      that._dialog.show(null, false);
+
+      if (__TABS_HELP_CACHE[that._helpUrl] != null)
+       return;
+      fetch(that._helpUrl)
+        .then(function(resp) { return resp.text(); })
+        .then(function(html)
+         {
+           __TABS_HELP_CACHE[that._helpUrl] = html;
+           that._render(html);
+         })
+        .catch(function()
+         {
+           // Not cached: reopening the popover retries the fetch.
+           that._render('<p>Sorry, this help content could not be loaded.</p>');
+         });
+    };
+
+   this.hide = function() { that._dialog?.hide(); };
+ }
+
+
+
+
+/**
  tabs ia an array:
     { label:"", descr:"", hide:true|false, onHideHanler: function, onSelectHandler: function }
 
@@ -592,61 +688,11 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
    this._position = (position == null || position == "top") ? "top" : position;
    this._posClass = this._position != "top" ? " tabContainer--pos-"+this._position : "";
    this._helpUrl = helpUrl || null;
-   this._helpDialog = null;
-
-   // Lazily creates (on first use) and (re)opens the help popover anchored to the "(?)" icon,
-   // fetching/rendering helpUrl's HTML (from cache if already fetched once this page load).
-   this._showHelp = function()
-    {
-      var that = this;
-      if (that._helpDialog == null)
-       {
-         that._helpDialog = new FloriaTooltipDialog(elementId+"_TABHELP", "", true, true, "tabHelpTooltip");
-         that._helpDialog.setSize("min(560px, 92vw)", "min(70vh, 620px)");
-         // Click-outside-to-close: only acts while THIS dialog's tooltip is actually shown, and
-         // ignores clicks on the tooltip itself or on the icon that opened it (which has its own
-         // toggle-safe handler further down in show()).
-         document.addEventListener("click", function(ev)
-          {
-            var tt = that._helpDialog?.getTooltipDiv();
-            if (tt == null || tt.hasAttribute("show-popper") == false)
-             return;
-            var icon = document.getElementById(elementId+"_TABHELP");
-            if (tt.contains(ev.target) || icon === ev.target || (icon != null && icon.contains(ev.target)))
-             return;
-            that._helpDialog.hide();
-          }, true);
-       }
-
-      var render = function(html)
-       {
-         that._helpDialog.setContents(
-             '<div class="tabHelpPopover">'
-           +   '<span class="tabHelpClose" title="Close">&times;</span>'
-           +   '<div class="tabHelpBody">'+html+'</div>'
-           + '</div>');
-         var closeEl = that._helpDialog.getTooltipDiv().querySelector(".tabHelpClose");
-         if (closeEl != null)
-          closeEl.onclick = function(e) { e.preventDefault(); e.stopPropagation(); that._helpDialog.hide(); };
-       };
-
-      render(__TABS_HELP_CACHE[that._helpUrl] || '<div class="tabHelpLoading">Loading…</div>');
-      that._helpDialog.show(null, false);
-
-      if (__TABS_HELP_CACHE[that._helpUrl] != null)
-       return;
-      fetch(that._helpUrl)
-        .then(function(resp) { return resp.text(); })
-        .then(function(html)
-         {
-           __TABS_HELP_CACHE[that._helpUrl] = html;
-           render(html);
-         })
-        .catch(function()
-         {
-           render('<p>Sorry, this help content could not be loaded.</p>');
-         });
-    };
+   // The help popover itself is not special to FloriaTabs — see FloriaHelpPopover above, which owns
+   // all of the fetch/cache/anchor/dismiss behavior. FloriaTabs merely renders the ".tabHelpIcon"
+   // anchor (in show(), below) and points one of these at it.
+   this._help = this._helpUrl == null ? null : new FloriaHelpPopover(elementId+"_TABHELP", this._helpUrl);
+   this._showHelp = function() { this._help?.show(); };
 
    this.show = function(defaultTabId = 0)
     {

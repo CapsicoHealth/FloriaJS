@@ -337,7 +337,7 @@
 .tabContainer > .tabHeader {
   border-bottom: 1px solid #EEE;
   box-shadow: 0 4px 2px -0px #EEE;
-  margin: 2px 0px 0px -20px;
+  margin: 6px 0px 0px -20px;
 }
 
 .tabContainer > .tabHeader SPAN {
@@ -789,6 +789,47 @@
   dump, since a FloriaTooltipDialog has no title bar/close button of its own (unlike FloriaDialog).
 **********************************************************/
 /*
+   The icon's shared APPEARANCE (the little circular "(i)" chip), kept deliberately separate from
+   the tab-header PLACEMENT rules that follow. The two are split because .tabHelpIcon is no longer
+   FloriaTabs-only: FloriaHelpPopover can anchor the same guide to any element a host app renders,
+   and such hosts build this exact SPAN to get this exact look (see makeFlowStudioHelpIcon() in
+   agentic-flow-studio.js, which mounts one next to a page title). Outside a .tabHeader nothing
+   competes with this rule, so a plain (0,0,1,1) SPAN.tabHelpIcon selector is enough there; INSIDE
+   one, the skins' own ".tabHeader SPAN" rules still win the layout properties, which is exactly
+   what the higher-specificity block below is for. Nothing here is positional, so it is safe for
+   the header rules to simply layer on top.
+*/
+SPAN.tabHelpIcon {
+  box-sizing: border-box;
+  width: 1.55em;
+  height: 1.55em;
+  min-width: 1.55em;
+  font-size: 0.95em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  user-select: none;
+  color: #5a6b7d;
+  background: #fbfcfe;
+  border: 1px solid #dde3ea;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.6) inset;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1;
+  vertical-align: middle;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+SPAN.tabHelpIcon:hover {
+  background: #4f6fb0;
+  color: #fff;
+  border-color: #4f6fb0;
+  box-shadow: 0 2px 6px rgba(79,111,176,0.35);
+}
+
+/*
    NOTE: both skins style ".tabHeader SPAN" directly (classic: ".tabContainer .tabHeader SPAN";
    modern: ".tabContainer--modern .tabHeader SPAN") — each with specificity (0,0,2,1) — setting
    position/border/padding/border-radius/margin for regular TAB spans. A plain ".tabHelpIcon"
@@ -798,7 +839,7 @@
    with both skins' own ancestor classes + SPAN + ".tabHelpIcon" bumps specificity to (0,0,3,1),
    reliably beating both skins' span rules for every property that must differ (position, border,
    padding, border-radius, margin-left, ...) — everything NOT overridden here (color, background,
-   box-shadow, ...) still simply comes from this same, now-winning rule.
+   box-shadow, ...) still simply comes from the shared appearance rule just above.
 */
 .tabContainer > .tabHeader SPAN.tabHelpIcon,
 .tabContainer--modern > .tabHeader SPAN.tabHelpIcon {

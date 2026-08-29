@@ -114,14 +114,10 @@ function adjustMenuPosition(menu, x, y) {
 // ============================================================================
 
 const _STYLES = {
-  controls      : `position:absolute;top:8px;right:8px;z-index:100;display:flex;gap:4px;
-                   background:white;padding:4px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1)`,
-  controlBtn    : `width:28px;height:28px;border:1px solid #ccc;border-radius:4px;background:white;
-                   cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:#333`,
-  helpBox       : `position:absolute;bottom:16px;right:16px;z-index:100;
-                   background:rgba(255,255,255,0.95);padding:12px 16px;border-radius:6px;
-                   box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;color:#666;
-                   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`,
+  // NOTE: the top-right controls bar, its buttons, and the bottom-right help box are NOT here —
+  // they're built inline in _createControls() below, since their colors are themeable per-instance
+  // via options.colors (see the FloriaDiagram constructor). Everything left here is fixed styling
+  // shared by all instances.
   contextMenu   : `position:fixed;display:none;list-style:none;margin:0;padding:4px 0;
                    background:white;border:1px solid #ccc;border-radius:4px;
                    box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:10000;min-width:140px;
@@ -150,7 +146,31 @@ export function FloriaDiagram(divId, options = {}) {
     dimensions: { minW: 800, maxW: 1200, minH: 600, maxH: 900 },
     highlightDisconnected: true,
     pan: true,
-    showHelp: true
+    showHelp: true,
+    // Every color this module paints onto the JointJS paper itself (as opposed to individual item/
+    // link chrome, which stays wherever _makeAgentDiagramItem/createLink etc. draw it) — the paper's
+    // own background, its dot grid, the optional canvas-boundary rect (see _createCanvasBoundary/
+    // _removeCanvasBoundary below), and the chrome _createControls (below) builds directly on top of
+    // the container: the zoom/reset/fullscreen button bar (top-right) and the help box (bottom-right).
+    // The right-click context menu (_createContextMenu/_createLinkContextMenu) is deliberately NOT
+    // included here — it keeps its own fixed light styling regardless. Defaults match this module's
+    // original light-page look exactly, so every existing caller is unaffected; a host embedding this
+    // in a dark surface (see flow-studio/js/flow-integration.js) can override any subset via
+    // options.colors.
+    colors: {
+      background: '#fafafa',      // joint.dia.Paper's own `background` option
+      gridDot: '#d0d4da',          // joint.dia.Paper's `drawGrid` dot color
+      boundaryOuter: '#e4e8ef',    // outer fill painted behind the whole paper once a max width/height is set
+      boundaryFill: '#f4f7fb',     // interior "working area" rect fill (inside the dashed boundary)
+      boundaryStroke: '#b7c0cc',   // interior rect's dashed stroke
+      controlsBg: '#ffffff',       // top-right zoom/reset/fullscreen button bar's own background
+      controlBtnBg: '#ffffff',     // each of those buttons' background
+      controlBtnBorder: '#cccccc', // each of those buttons' border
+      controlBtnColor: '#333333',  // each of those buttons' glyph color
+      helpBg: 'rgba(255,255,255,0.95)', // bottom-right help box background
+      helpText: '#666666',         // help box body text color
+      helpAccent: '#5c6bc0'        // help box "Pan:"/"Zoom:"/"Undo/Redo:" label color
+    }
   };
   
   this._options = {
@@ -161,6 +181,7 @@ export function FloriaDiagram(divId, options = {}) {
     highlightDisconnected: options.highlightDisconnected ?? defaults.highlightDisconnected,
     pan: options.pan ?? defaults.pan,
     showHelp: options.showHelp ?? defaults.showHelp,
+    colors: { ...defaults.colors, ...options.colors },
     // Optional function(), called from _saveState() — i.e. on every user-driven change that pushes an
     // undo snapshot: element moves, vertex drags, link add/remove/reconnect, delete, clear, etc. Lets
     // the host app mark its own "unsaved changes" state dirty without having to hook every individual
@@ -212,8 +233,8 @@ export function FloriaDiagram(divId, options = {}) {
     width: '100%',
     height: '100%',
     gridSize: 10,
-    drawGrid: { name: 'dot', args: { color: '#d0d4da' } },
-    background: { color: '#fafafa' },
+    drawGrid: { name: 'dot', args: { color: this._options.colors.gridDot } },
+    background: { color: this._options.colors.background },
     interactive: {
       linkMove: true, labelMove: true, arrowheadMove: true,
       vertexMove: true, vertexAdd: true, vertexRemove: true, useLinkTools: true
@@ -260,7 +281,7 @@ FloriaDiagram.prototype._createCanvasBoundary = function() {
   const height = maxH || 8000;
 
   // Light outer background fills the entire JointJS paper SVG area
-  this._paper.drawBackground({ color: '#e4e8ef' });
+  this._paper.drawBackground({ color: this._options.colors.boundaryOuter });
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const rect = document.createElementNS(svgNS, 'rect');
@@ -270,15 +291,15 @@ FloriaDiagram.prototype._createCanvasBoundary = function() {
   rect.setAttribute('height', String(height));
   // Interior fill is slightly lighter than the outer background so the working area is visually
   // distinguished from the surrounding margin, without a jarring pure-white flash.
-  rect.setAttribute('fill',   '#f4f7fb');
-  rect.setAttribute('stroke', '#b7c0cc');
+  rect.setAttribute('fill',   this._options.colors.boundaryFill);
+  rect.setAttribute('stroke', this._options.colors.boundaryStroke);
   rect.setAttribute('stroke-width',    '1.5');
   rect.setAttribute('stroke-dasharray', '6 4');
   rect.setAttribute('pointer-events',  'none');
   rect.setAttribute('class', 'floria-canvas-boundary');
   // Mirror fill/stroke as inline style too — see forceElementStyle()'s docs above (and
   // docs/module-diagram.md §10-I) for why the plain attributes above aren't reliably enough on their own.
-  forceElementStyle(rect, { fill: '#f4f7fb', stroke: '#b7c0cc' });
+  forceElementStyle(rect, { fill: this._options.colors.boundaryFill, stroke: this._options.colors.boundaryStroke });
   this._boundaryRectSVG = rect;
   this._boundaryUsesManualTransform = false;
 
@@ -327,7 +348,7 @@ FloriaDiagram.prototype._removeCanvasBoundary = function() {
     this._boundaryRectSVG    = null;
     this._boundaryWrapperG   = null;
     this._boundaryUsesManualTransform = false;
-    this._paper.drawBackground({ color: '#fafafa' });
+    this._paper.drawBackground({ color: this._options.colors.background });
   }
 };
 
@@ -338,14 +359,19 @@ FloriaDiagram.prototype._removeCanvasBoundary = function() {
 
 FloriaDiagram.prototype._createControls = function() {
   const that = this;
+  const c = this._options.colors;
   const controls = document.createElement('div');
   controls.className = 'floria-diagram-controls';
-  controls.style.cssText = _STYLES.controls;
-  
-  controls.appendChild(createButton('+', 'Zoom In',           _STYLES.controlBtn, () => that.zoomIn()));
-  controls.appendChild(createButton('−', 'Zoom Out',          _STYLES.controlBtn, () => that.zoomOut()));
-  controls.appendChild(createButton('⟲', 'Reset View',        _STYLES.controlBtn, () => that.resetView()));
-  this._fullscreenBtn = createButton('⛶', 'Toggle Fullscreen', _STYLES.controlBtn, () => that.fullscreen());
+  controls.style.cssText = `position:absolute;top:8px;right:8px;z-index:100;display:flex;gap:4px;
+                   background:${c.controlsBg};padding:4px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1)`;
+
+  const controlBtnStyle = `width:28px;height:28px;border:1px solid ${c.controlBtnBorder};border-radius:4px;background:${c.controlBtnBg};
+                   cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:${c.controlBtnColor}`;
+
+  controls.appendChild(createButton('+', 'Zoom In',           controlBtnStyle, () => that.zoomIn()));
+  controls.appendChild(createButton('−', 'Zoom Out',          controlBtnStyle, () => that.zoomOut()));
+  controls.appendChild(createButton('⟲', 'Reset View',        controlBtnStyle, () => that.resetView()));
+  this._fullscreenBtn = createButton('⛶', 'Toggle Fullscreen', controlBtnStyle, () => that.fullscreen());
   controls.appendChild(this._fullscreenBtn);
   
   this._container.appendChild(controls);
@@ -355,11 +381,14 @@ FloriaDiagram.prototype._createControls = function() {
   if (this._options.showHelp) {
     const helpBox = document.createElement('div');
     helpBox.className = 'floria-diagram-help';
-    helpBox.style.cssText = _STYLES.helpBox;
+    helpBox.style.cssText = `position:absolute;bottom:16px;right:16px;z-index:100;
+                   background:${c.helpBg};padding:12px 16px;border-radius:6px;
+                   box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;color:${c.helpText};
+                   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`;
     
-    const panText  = this._options.pan         ? '<strong style="color:#5c6bc0;font-weight:600">Pan:</strong> Click and drag on canvas<br>' : '';
-    const zoomText = this._options.zoom.wheel  ? '<strong style="color:#5c6bc0;font-weight:600">Zoom:</strong> Mouse wheel<br>' : '';
-    const undoText = this._options.undo > 0    ? '<strong style="color:#5c6bc0;font-weight:600">Undo/Redo:</strong> Ctrl+Z / Ctrl+Y' : '';
+    const panText  = this._options.pan         ? `<strong style="color:${c.helpAccent};font-weight:600">Pan:</strong> Click and drag on canvas<br>` : '';
+    const zoomText = this._options.zoom.wheel  ? `<strong style="color:${c.helpAccent};font-weight:600">Zoom:</strong> Mouse wheel<br>` : '';
+    const undoText = this._options.undo > 0    ? `<strong style="color:${c.helpAccent};font-weight:600">Undo/Redo:</strong> Ctrl+Z / Ctrl+Y` : '';
     
     helpBox.innerHTML = panText + zoomText + undoText;
     if (panText || zoomText || undoText) this._container.appendChild(helpBox);

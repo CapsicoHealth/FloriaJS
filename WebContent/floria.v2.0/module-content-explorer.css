@@ -20,21 +20,80 @@
    All rules are scoped under .cex-root so multiple instances
    on the same page never collide.
 
-   DESIGN TOKENS — kept intentionally in sync with module-tree-explorer.css:
-     Primary accent  : #4f46e5  (indigo-600)
-     Accent light    : #ede9fe  (indigo-100)
-     Accent hover-bg : #e0e7ff  (indigo-100)
-     Accent border   : #a5b4fc  (indigo-300)
-     Danger          : #dc2626  (red-600)
-     Restore/safe    : #065f46  (emerald-800)
-     Trash-active    : #fef3c7 / #b45309  (amber-100 / amber-700)
-     Border          : #e1e4e8
-     Background      : #f5f7fa
-     Text primary    : #1a1f36
-     Text body       : #374151
-     Text muted      : #9ca3af
-   If you change any of these here, update module-tree-explorer.css too.
+   THEMING CONTRACT
+   ----------------
+   Every color below resolves through one of the --cex-* custom properties
+   declared on :root. Nothing paints a raw literal at its point of use. The
+   values are the LIGHT theme (the historical look, unchanged).
+
+   Because the tokens are declared on :root they are INHERITED, so a host that
+   needs a different look re-declares whichever subset it cares about on an
+   ANCESTOR of .cex-root -- no rule overrides, no specificity fights, and it
+   keeps working as this stylesheet evolves. (Deliberately NOT declared on
+   .cex-root itself: that would sit closer to the elements than any host
+   ancestor and would therefore always win, defeating the whole point.)
+   This mirrors chat-widget.css's contract -- ContentExplorer is most often
+   mounted right next to a chat widget (e.g. the agentic "Live Reports"
+   drawer), so the two must be re-themable the same way.
+
+   If you add a new color here, add a TOKEN -- do not inline a literal, or
+   dark hosts silently get a light-theme splotch.
+
+   The palette is kept intentionally in sync with module-tree-explorer.css.
+   If you change any value here, update that file too.
    ============================================================ */
+:root {
+  /* -- Surfaces -- */
+  --cex-bg: #f5f7fa;             /* root background */
+  --cex-surface: #ffffff;        /* toolbar, tiles, rows, menus, dialogs */
+  --cex-surface-2: #f3f4f6;      /* button faces, menu-item hover */
+  --cex-surface-3: #f9fafb;      /* filter input, dialog header */
+
+  /* -- Borders -- */
+  --cex-border: #e1e4e8;
+  --cex-border-soft: #e5e7eb;    /* separators, section rules */
+  --cex-border-strong: #d1d5db;  /* dialog outline */
+
+  /* -- Text -- */
+  --cex-text: #1a1f36;           /* primary */
+  --cex-text-title: #1f2937;     /* tile/card titles */
+  --cex-text-strong: #111827;    /* dialog values */
+  --cex-text-body: #374151;      /* menu items, button labels */
+  --cex-text-dim: #6b7280;       /* labels, secondary */
+  --cex-text-muted: #9ca3af;     /* empty state, meta */
+  --cex-text-icon: #555555;      /* toolbar icon glyphs at rest */
+
+  /* -- Accent (indigo) -- */
+  --cex-accent: #4f46e5;
+  --cex-accent-hover-bg: #e0e7ff;
+  --cex-accent-light: #ede9fe;   /* :active / "on" fills */
+  --cex-accent-border: #a5b4fc;
+  --cex-accent-tint: #f5f3ff;    /* subtle tile/row hover wash */
+  --cex-accent-glow: rgba(79, 70, 229, 0.15);
+  --cex-accent-badge-bg: #ddd6fe;
+  --cex-folder-line: #7c6fd0;    /* the "stuff" lines drawn inside the folder glyph */
+
+  /* -- Semantic -- */
+  --cex-danger: #dc2626;
+  --cex-danger-bg: #fef2f2;
+  --cex-restore: #065f46;        /* safe/positive action */
+  --cex-restore-bg: #d1fae5;
+
+  /* -- Trash / "in the bin" state (amber) -- */
+  --cex-trash-fg: #b45309;
+  --cex-trash-bg: #fef3c7;
+  --cex-trash-border: #f59e0b;
+  --cex-trash-fg-hover: #92400e;
+  --cex-trash-bg-hover: #fde68a;
+  --cex-trash-border-hover: #d97706;
+  --cex-trash-tile-bg: #fffbeb;
+  --cex-trash-glow: rgba(245, 158, 11, 0.15);
+
+  /* -- Misc -- */
+  --cex-scrollbar: #c7c7c7;
+  --cex-shadow-menu: 0 4px 16px rgba(0, 0, 0, 0.14);
+  --cex-shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
 
 /* ── Root container ──────────────────────────────────────────────────────── */
 .cex-root {
@@ -44,8 +103,8 @@
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
-  color: #1a1f36;
-  background: #f5f7fa;
+  color: var(--cex-text);
+  background: var(--cex-bg);
   box-sizing: border-box;
 }
 
@@ -59,8 +118,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  background: #fff;
-  border-bottom: 1px solid #e1e4e8;
+  background: var(--cex-surface);
+  border-bottom: 1px solid var(--cex-border);
   flex-shrink: 0;
   min-height: 44px;
   flex-wrap: wrap;   /* allow toolbar to wrap rather than enforce a minimum width */
@@ -73,10 +132,10 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 6px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--cex-border);
   border-radius: 6px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--cex-surface-2);
+  color: var(--cex-text-body);
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
@@ -84,16 +143,16 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .cex-back-btn:hover {
-  background: #e0e7ff;
-  border-color: #4f46e5;
-  color: #4f46e5;
+  background: var(--cex-accent-hover-bg);
+  border-color: var(--cex-accent);
+  color: var(--cex-accent);
 }
 
 /* Breadcrumb label shown in content view */
 .cex-breadcrumb {
   font-size: 13px;
   font-weight: 600;
-  color: #4f46e5;
+  color: var(--cex-accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -107,17 +166,18 @@
   flex: 1 1 60px;      /* can shrink below 80px at very narrow widths */
   min-width: 0;        /* remove the hard floor so the toolbar can go narrow */
   padding: 5px 10px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--cex-border);
   border-radius: 6px;
   font-size: 13px;
   outline: none;
-  background: #f9fafb;
+  color: var(--cex-text);
+  background: var(--cex-surface-3);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cex-filter:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
-  background: #fff;
+  border-color: var(--cex-accent);
+  box-shadow: 0 0 0 2px var(--cex-accent-glow);
+  background: var(--cex-surface);
 }
 
 /* Toolbar icon buttons */
@@ -134,35 +194,35 @@
      it's still in the DOM but effectively invisible. Same fix applied to .tex-icon-btn
      (module-tree-explorer.css) and already present on .lp-icon-btn (landing-cards.css). */
   padding: 0;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--cex-border);
   border-radius: 6px;
-  background: #f3f4f6;
-  color: #555;
+  background: var(--cex-surface-2);
+  color: var(--cex-text-icon);
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .cex-icon-btn:hover {
-  background: #e0e7ff;
-  color: #4f46e5;
-  border-color: #4f46e5;
+  background: var(--cex-accent-hover-bg);
+  color: var(--cex-accent);
+  border-color: var(--cex-accent);
 }
 .cex-icon-btn.active {
-  background: #ede9fe;
-  color: #4f46e5;
-  border-color: #4f46e5;
+  background: var(--cex-accent-light);
+  color: var(--cex-accent);
+  border-color: var(--cex-accent);
 }
 
 /* Trash toggle specifically — amber when active so it's unmistakably "in trash" */
 .cex-icon-btn.cex-trash-active {
-  background: #fef3c7;
-  color: #b45309;
-  border-color: #f59e0b;
+  background: var(--cex-trash-bg);
+  color: var(--cex-trash-fg);
+  border-color: var(--cex-trash-border);
 }
 .cex-icon-btn.cex-trash-active:hover {
-  background: #fde68a;
-  color: #92400e;
-  border-color: #d97706;
+  background: var(--cex-trash-bg-hover);
+  color: var(--cex-trash-fg-hover);
+  border-color: var(--cex-trash-border-hover);
 }
 .cex-icon-btn svg {
   pointer-events: none;
@@ -192,7 +252,7 @@
 /* Sort toggle label — hide at narrow widths to save space */
 .cex-sort-label {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--cex-text-dim);
   white-space: nowrap;
   flex-shrink: 1;       /* allow it to be pushed out before the filter shrinks */
   min-width: 0;
@@ -207,17 +267,17 @@
   overflow-x: hidden;
   padding: 8px 6px;
   scrollbar-width: thin;
-  scrollbar-color: #c7c7c7 transparent;
+  scrollbar-color: var(--cex-scrollbar) transparent;
 }
 .cex-body::-webkit-scrollbar { width: 6px; }
 .cex-body::-webkit-scrollbar-track { background: transparent; }
-.cex-body::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 3px; }
+.cex-body::-webkit-scrollbar-thumb { background: var(--cex-scrollbar); border-radius: 3px; }
 
 /* Empty state */
 .cex-empty {
   padding: 2em 1em;
   text-align: center;
-  color: #9ca3af;
+  color: var(--cex-text-muted);
   font-style: italic;
   font-size: 13px;
 }
@@ -238,9 +298,9 @@
   align-items: center;
   justify-content: flex-start;
   padding: 12px 8px 10px 8px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--cex-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--cex-surface);
   cursor: pointer;
   user-select: none;
   transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -248,12 +308,12 @@
   overflow: hidden;
 }
 .cex-folder-tile:hover {
-  border-color: #a5b4fc;
-  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.15);
-  background: #f5f3ff;
+  border-color: var(--cex-accent-border);
+  box-shadow: 0 2px 10px var(--cex-accent-glow);
+  background: var(--cex-accent-tint);
 }
 .cex-folder-tile:active {
-  background: #ede9fe;
+  background: var(--cex-accent-light);
 }
 
 /* Trashed folder tile — desaturated to signal it's in the bin */
@@ -263,17 +323,17 @@
   cursor: default;
 }
 .cex-folder-tile.cex-trashed:hover {
-  border-color: #f59e0b;
-  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15);
-  background: #fffbeb;
+  border-color: var(--cex-trash-border);
+  box-shadow: 0 2px 10px var(--cex-trash-glow);
+  background: var(--cex-trash-tile-bg);
 }
 
 /* Restore menu item — green tint to signal a safe/positive action */
 .cex-context-menu-item.restore {
-  color: #065f46;
+  color: var(--cex-restore);
 }
 .cex-context-menu-item.restore:hover {
-  background: #d1fae5;
+  background: var(--cex-restore-bg);
 }
 
 /* Icon wrapper inside a tile */
@@ -296,13 +356,22 @@
   height: 48px;
 }
 
+/* The built-in folder glyph (_SVG.folder in module-content-explorer.js) bakes its indigo into
+   SVG *presentation attributes*, which are the weakest declarations in the cascade — so these
+   real CSS rules both re-assert them (see the .cex-icon-btn note above about hostile global
+   svg/path/line resets) AND make the glyph follow the theme tokens like everything else. The
+   attributes in the JS stay as the no-CSS fallback. */
+.cex-folder-icon svg        { stroke: var(--cex-accent); }
+.cex-folder-icon svg path   { fill: var(--cex-accent-light); stroke: var(--cex-accent); }
+.cex-folder-icon svg line   { stroke: var(--cex-folder-line); }
+
 /* Title below the icon */
 .cex-folder-title {
   width: 100%;
   text-align: center;
   font-size: 12px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--cex-text-title);
   line-height: 1.3;
   /* max 2 lines then ellipsis */
   display: -webkit-box;
@@ -322,31 +391,31 @@
 }
 
 .cex-content-row {
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--cex-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--cex-surface);
   cursor: pointer;
   min-width: 0;   /* allow row to shrink below its content's natural width */
   overflow: hidden;
   transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .cex-content-row:hover {
-  border-color: #a5b4fc;
-  box-shadow: 0 1px 6px rgba(79, 70, 229, 0.12);
-  background: #f5f3ff;
+  border-color: var(--cex-accent-border);
+  box-shadow: 0 1px 6px var(--cex-accent-glow);
+  background: var(--cex-accent-tint);
 }
 .cex-content-row:active {
-  background: #ede9fe;
+  background: var(--cex-accent-light);
 }
 
 /* ── Context menu ────────────────────────────────────────────────────────── */
 .cex-context-menu {
   position: fixed;
   z-index: 9999;
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: var(--cex-surface);
+  border: 1px solid var(--cex-border);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--cex-shadow-menu);
   padding: 4px 0;
   min-width: 140px;
   font-size: 13px;
@@ -364,18 +433,18 @@
   gap: 8px;
   padding: 7px 14px;
   cursor: pointer;
-  color: #374151;
+  color: var(--cex-text-body);
   white-space: nowrap;
   transition: background 0.1s ease;
 }
 .cex-context-menu-item:hover {
-  background: #f3f4f6;
+  background: var(--cex-surface-2);
 }
 .cex-context-menu-item.danger {
-  color: #dc2626;
+  color: var(--cex-danger);
 }
 .cex-context-menu-item.danger:hover {
-  background: #fef2f2;
+  background: var(--cex-danger-bg);
 }
 .cex-context-menu-item svg {
   flex-shrink: 0;
@@ -384,7 +453,7 @@
 
 .cex-context-menu-sep {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--cex-border-soft);
   margin: 4px 0;
 }
 
@@ -395,10 +464,10 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 9999;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--cex-surface);
+  border: 1px solid var(--cex-border-strong);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  box-shadow: var(--cex-shadow-dialog);
   min-width: 280px;
   max-width: 420px;
   font-size: 13px;
@@ -409,13 +478,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px 9px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--cex-border-soft);
+  background: var(--cex-surface-3);
   border-radius: 8px 8px 0 0;
 }
 .cex-props-title {
   font-weight: 600;
-  color: #111827;
+  color: var(--cex-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -424,12 +493,12 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--cex-text-muted);
   font-size: 14px;
   padding: 0 2px;
   line-height: 1;
 }
-.cex-props-close:hover { color: #111827; }
+.cex-props-close:hover { color: var(--cex-text-strong); }
 .cex-props-body {
   padding: 16px 18px;
 }
@@ -437,7 +506,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b7280;
+  color: var(--cex-text-dim);
 }
 .cex-spin svg { animation: cex-spin 0.8s linear infinite; }
 @keyframes cex-spin { to { transform: rotate(360deg); } }
@@ -447,14 +516,14 @@
 }
 .cex-props-table th {
   text-align: left;
-  color: #6b7280;
+  color: var(--cex-text-dim);
   font-weight: 500;
   padding: 5px 10px 5px 0;
   white-space: nowrap;
 }
 .cex-props-table td {
   text-align: right;
-  color: #111827;
+  color: var(--cex-text-strong);
   font-weight: 600;
   padding: 5px 0;
 }
@@ -463,13 +532,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #6b7280;
+  color: var(--cex-text-dim);
   margin: 0 0 6px;
 }
 .cex-props-section-recursive {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--cex-border-soft);
 }
 
 
@@ -488,33 +557,33 @@
       width: 38px;
       height: 38px;
       border-radius: 8px;
-      background: #ede9fe;
+      background: var(--cex-accent-light);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      color: #4f46e5;
+      color: var(--cex-accent);
     }
     .cex-content-card-body { flex: 1; min-width: 0; }
     .cex-content-card-title {
       font-weight: 600;
       font-size: 13px;
-      color: #1f2937;
+      color: var(--cex-text-title);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .cex-content-card-meta {
       font-size: 11px;
-      color: #9ca3af;
+      color: var(--cex-text-muted);
       margin-top: 2px;
     }
     .cex-content-card-badge {
       font-size: 10px;
       padding: 2px 8px;
       border-radius: 20px;
-      background: #ddd6fe;
-      color: #4f46e5;
+      background: var(--cex-accent-badge-bg);
+      color: var(--cex-accent);
       font-weight: 600;
       flex-shrink: 0;
     }

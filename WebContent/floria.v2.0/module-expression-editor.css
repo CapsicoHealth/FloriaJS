@@ -23,7 +23,17 @@
    All rules are scoped under .fee-root so multiple instances on the
    same page never collide.
 
-   DESIGN TOKENS — kept intentionally in sync with module-tree-explorer.css:
+   THEMING / OVERRIDE CONTRACT: every color below is read through one of the
+   "--fee-*" custom properties declared in the :root block right below (same
+   convention as module-forms2.css's "--floria-forms-*") — this component's
+   public theming surface. A host app that wants to re-skin this editor (e.g.
+   for a dark page) only needs to redeclare any subset of these at :root, or
+   on any ancestor of the mounted editor — see e.g. flow-studio/styles.css's
+   "--fee-*" block. Fallback values baked into every var(...) call keep this
+   file rendering sensibly with no host override present.
+
+   DESIGN TOKENS (light-theme defaults) — kept intentionally in sync with
+   module-tree-explorer.css:
      Primary accent  : #4f46e5  (indigo-600)
      Accent light    : #ede9fe  (indigo-100)
      Accent border   : #a5b4fc  (indigo-300)
@@ -34,6 +44,21 @@
      Text body       : #374151
      Text muted      : #9ca3af
    ============================================================ */
+:root {
+  --fee-text:          #1a1f36;
+  --fee-text-body:     #374151;
+  --fee-text-muted:    #6b7280;
+  --fee-text-faint:    #9ca3af;
+  --fee-border:        #e1e4e8;
+  --fee-bg:            #fff;
+  --fee-bg-subtle:     #f9fafb;  /* leaf/JSON block background */
+  --fee-accent:        #4f46e5;
+  --fee-accent-light:  #ede9fe;
+  --fee-accent-border: #a5b4fc;
+  --fee-accent-hover:  #4338ca;
+  --fee-danger:        #dc2626;
+  --fee-danger-light:  #fecaca;
+}
 
 /* ── Root container ──────────────────────────────────────────────────────
    Intentionally NO fixed height / overflow here: the component takes the
@@ -44,7 +69,7 @@
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 1em;
-  color: #1a1f36;
+  color: var(--fee-text);
 }
 
 .fee-root *, .fee-root *::before, .fee-root *::after {
@@ -74,8 +99,8 @@
 
 .fee-help-icon {
   cursor: help;
-  border: 1px solid #a5b4fc;
-  color: #4f46e5;
+  border: 1px solid var(--fee-accent-border);
+  color: var(--fee-accent);
   border-radius: 50%;
   width: 18px;
   height: 18px;
@@ -85,7 +110,7 @@
   font-size: 0.85em;
   font-weight: 700;
   flex-shrink: 0;
-  background: #ede9fe;
+  background: var(--fee-accent-light);
   /* Pinned flush right via the flex row (margin-left:auto) with a deliberate buffer on its own
      right edge: the scrolling ancestor (module-dialog.css's ".tabContainer .tabBody > DIV",
      overflow:auto) carves a scrollbar track (~15-17px) out of this SAME right edge only once the
@@ -103,14 +128,14 @@
   line-height: 1.25;
   padding: 1.4em 1.6em;
 }
-.fee-help-body b { color: #4f46e5; }
+.fee-help-body b { color: var(--fee-accent); }
 
 /* The "?" help icon's popover — a proper rounded/shadowed "card" (mirroring FloriaTabs' own
    helpUrl popover, ".popperTooltip.tabHelpTooltip" in module-dialog.css) with its own "×" close
    button, rather than a bare flat-background tooltip. See module-expression-editor.js's
    _renderBuilder() for how this is wired up (arrow=true, manual=true, click-outside-to-close). */
 .popperTooltip.feeHelpTooltip {
-  background: #fff;
+  background: var(--fee-bg);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06);
   padding: 0;
@@ -124,12 +149,12 @@
   right: 10px;
   font-size: 20px;
   line-height: 1;
-  color: #999;
+  color: var(--fee-text-faint);
   cursor: pointer;
   transition: color 0.15s ease;
 }
 .fee-help-close:hover {
-  color: #333;
+  color: var(--fee-text-body);
 }
 
 /* ── Builder: rows / groups ───────────────────────────────────────────── */
@@ -160,7 +185,7 @@
 
 .fee-op-toggle {
   display: inline-flex;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--fee-border);
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
@@ -171,14 +196,14 @@
   font-size: 0.85em;
   font-weight: 600;
   border: none;
-  background: #fff;
-  color: #6b7280;
+  background: var(--fee-bg);
+  color: var(--fee-text-muted);
   cursor: pointer;
 }
-.fee-op-btn + .fee-op-btn { border-left: 1px solid #e1e4e8; }
+.fee-op-btn + .fee-op-btn { border-left: 1px solid var(--fee-border); }
 .fee-op-btn:hover { background: #f3f4f6; }
-.fee-op-btn.active { background: #4f46e5; color: #fff; }
-.fee-op-btn.active:hover { background: #4338ca; }
+.fee-op-btn.active { background: var(--fee-accent); color: #fff; }
+.fee-op-btn.active:hover { background: var(--fee-accent-hover); }
 
 /* ── "Matching"/"Not matching" toggle ─────────────────────────────────────
    An iOS-style switch + dynamic label, replicating the look & feel of the
@@ -283,27 +308,27 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--fee-text-faint);
   font-size: 0.85em;
   line-height: 1;
   padding: 2px 4px;
 }
-.fee-move-btn:hover:not(:disabled) { color: #4f46e5; }
+.fee-move-btn:hover:not(:disabled) { color: var(--fee-accent); }
 .fee-move-btn:disabled { opacity: 0.25; cursor: default; }
 
 .fee-btn {
-  border: 1px solid #e1e4e8;
-  background: #fff;
+  border: 1px solid var(--fee-border);
+  background: var(--fee-bg);
   border-radius: 6px;
   padding: 4px 9px;
   font-size: 0.85em;
   cursor: pointer;
-  color: #374151;
+  color: var(--fee-text-body);
   white-space: nowrap;
 }
 .fee-btn:hover { background: #f3f4f6; border-color: #d1d5db; }
 
-.fee-btn-danger { color: #dc2626; border-color: #fecaca; }
+.fee-btn-danger { color: var(--fee-danger); border-color: var(--fee-danger-light); }
 .fee-btn-danger:hover { background: #fef2f2; }
 
 /* ── Leaf (condition) editor ──────────────────────────────────────────── */
@@ -318,8 +343,8 @@
   align-items: flex-start;
   gap: 6px;
   flex-wrap: wrap;
-  background: #f9fafb;
-  border: 1px solid #e1e4e8;
+  background: var(--fee-bg-subtle);
+  border: 1px solid var(--fee-border);
   border-radius: 8px;
   padding: 6px 8px;
 }
@@ -327,10 +352,10 @@
 .fee-select {
   padding: 3px 6px;
   font-size: 0.9em;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--fee-border);
   border-radius: 6px;
-  background: #fff;
-  color: #1a1f36;
+  background: var(--fee-bg);
+  color: var(--fee-text);
   max-width: 200px;
 }
 
@@ -347,8 +372,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #ede9fe;
-  color: #4338ca;
+  background: var(--fee-accent-light);
+  color: var(--fee-accent-hover);
   border-radius: 12px;
   padding: 2px 4px 2px 9px;
   font-size: 0.85em;
@@ -358,13 +383,13 @@
 .fee-chip-x {
   border: none;
   background: none;
-  color: #4338ca;
+  color: var(--fee-accent-hover);
   cursor: pointer;
   font-size: 0.9em;
   line-height: 1;
   padding: 2px 4px;
 }
-.fee-chip-x:hover { color: #dc2626; }
+.fee-chip-x:hover { color: var(--fee-danger); }
 
 .fee-value-input {
   border: none;
@@ -374,6 +399,7 @@
   min-width: 120px;
   flex: 1 1 auto;
   background: transparent;
+  color: var(--fee-text);
 }
 
 /* ── Custom Picker values (FloriaFactories.PickerRegistry) ──────────────────
@@ -387,13 +413,13 @@
 .fee-values-picker a {
   font-size: 0.9em;
   font-weight: 600;
-  color: #4f46e5;
+  color: var(--fee-accent);
   text-decoration: none;
 }
 .fee-values-picker a:hover { text-decoration: underline; }
 .fee-values-picker .codesSelectionBox {
   font-size: 0.85em;
-  color: #374151;
+  color: var(--fee-text-body);
 }
 
 
@@ -403,11 +429,11 @@
    (kept, more subtle) wasn't enough of a visual anchor at a glance, especially several levels deep. */
 .fee-group {
   margin-left: 22px;
-  border: 1px dashed #c7d2fe;
+  border: 1px dashed var(--fee-accent-border);
   border-left: 4px solid #818cf8;
   border-radius: 8px;
   padding: 10px 10px 10px 14px;
-  background: #fbfbff;
+  background: var(--fee-bg-subtle);
 }
 
 .fee-add-buttons {
@@ -503,7 +529,7 @@
 .fee-section-label {
   font-size: 0.85em;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--fee-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin: 14px 0 6px;
@@ -530,8 +556,8 @@
 .fee-tok-descr{ color: #94a3b8; }
 
 .fee-json {
-  background: #f9fafb;
-  border: 1px solid #e1e4e8;
+  background: var(--fee-bg-subtle);
+  border: 1px solid var(--fee-border);
   border-radius: 8px;
   padding: 12px 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -539,14 +565,14 @@
   overflow-x: auto;
   white-space: pre;
 }
-.fee-json .json_key     { color: #4f46e5; }
+.fee-json .json_key     { color: var(--fee-accent); }
 .fee-json .json_string  { color: #16a34a; }
 .fee-json .json_number  { color: #d97706; }
 .fee-json .json_boolean { color: #7c3aed; }
-.fee-json .json_null    { color: #9ca3af; }
+.fee-json .json_null    { color: var(--fee-text-faint); }
 
 .fee-empty-msg {
-  color: #9ca3af;
+  color: var(--fee-text-faint);
   font-size: 0.9em;
   padding: 20px;
   text-align: center;

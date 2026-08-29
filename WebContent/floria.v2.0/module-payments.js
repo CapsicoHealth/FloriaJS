@@ -798,25 +798,24 @@ FloriaPayments.PlansDialog = {
 
 /**
  * A self-contained cost/activity dashboard for the signed-in user's own pre-paid credit wallet(s), built
- * entirely from the raw rows returned by {@code /svc/user/credits/usage} (see UserCreditsUsage.java on the
+ * entirely from the raw rows returned by {@code /svc/wanda/credits/usage} (see UserCreditsUsage.java on the
  * Wanda side): a Product / Days-back (30/60/90, 30 default) / Type / Item toolbar, four at-a-glance summary
  * cards, a daily spend-vs-operations trend chart, a "Where Your Credits Go" cost-breakdown pie, a set of
- * "Cost Hot Spots" cards (top 3 items per {@code reference} category -- e.g. Agents/Flows/Documents -- that
+ * "Cost Hot Spots" cards (top 3 items per {@code itemType} category -- e.g. Agents/Flows/Documents -- that
  * is actually present in the window; categories the user never used simply don't get a card), and a
  * collapsed-by-default sortable full-activity table for anyone who wants to drill further.
  * <P>
- * "Type" (the {@code reference} field, e.g. agents/flows/documents) and "Item" (the {@code notes} field --
+ * "Type" (the {@code itemType} field, e.g. Agent/Flow/Document) and "Item" (the {@code itemLabel} field --
  * one specific agent/flow/document name, dependent on the current Type) are two independent filters: Type
  * narrows the category, Item narrows to one specific thing within it. The Item combo is a search+select
  * (not a plain dropdown), since document titles in particular can be long and numerous. Clicking a pie slice
  * or a hot-spot card item is a shortcut for setting these same two filters.
  * <P>
- * By design (see UserCreditsUsage's own docs), the server does no aggregation at all beyond the USE-only,
- * date-window filter — every bucketing (by day, by {@code reference}, by {@code notes}) happens here, in one
- * place, off the one already-fetched row set, so changing a filter (or clicking a pie slice / hot-spot item)
- * never needs a new round trip. The hot-spot cards are deliberately computed off the FULL window (ignoring
- * the active Type/Item filters, though still respecting Days-back/Product) so they stay a stable overview
- * even while the rest of the dashboard is drilled into one specific category.
+ * Rows also carry an {@code itemId} (the specific flow/agent/document's own id, added alongside the
+ * {@code reference}->{@code itemType} / {@code notes}->{@code itemLabel} rename on the Wanda side). It is
+ * NULL on every historical row and is never used for bucketing here -- {@code itemLabel} stays the grouping
+ * key so old and new rows aggregate together -- it is only carried through to the detail table/CSV as a
+ * drill-down handle for whoever needs to correlate a line back to a specific object.
  * <P>
  * Multiple independent panels (unlikely, but the same signed-in user could in principle have more than one
  * open — e.g. this dialog plus a lingering async response from a since-replaced one) are kept from clobbering
@@ -849,7 +848,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
 
   /**
    * Paints the toolbar (product switcher when there is more than one credit product, days-back selector, a
-   * "Type" filter scoped to whatever {@code reference} buckets -- e.g. agents/flows/documents -- are actually
+   * "Type" filter scoped to whatever {@code itemType} buckets -- e.g. Agent/Flow/Document -- are actually
    * present, and a dependent "Item" filter for drilling into one specific agent/flow/document by name) into
    * {@code cntId}, then kicks off the first load.
    *
@@ -862,7 +861,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
   render: function(cntId, basePath, productIds, onFirstLoad)
    {
       let state = FloriaPayments.PlansDialog.UsageDashboard._state[cntId] =
-        { basePath: basePath, productIds: productIds, productId: productIds[0], days: 30, reference: null, note: null
+        { basePath: basePath, productIds: productIds, productId: productIds[0], days: 30, itemType: null, itemLabel: null
         , items: [], _filterCombo: null, _itemCombo: null, _tableDrawn: false
         , _onFirstLoad: typeof onFirstLoad === 'function' ? onFirstLoad : null };
 
@@ -908,8 +907,8 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       }, null, true);
 
       FloriaDOM.addEvent(cntId+"_UD_RESET", "click", function() {
-         state.reference = null;
-         state.note = null;
+         state.itemType = null;
+         state.itemLabel = null;
          FloriaPayments.PlansDialog.UsageDashboard._paintFilterCombos(cntId);
          FloriaPayments.PlansDialog.UsageDashboard._paint(cntId);
       }, null, true);
@@ -930,14 +929,14 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       if (body != null)
        body.innerHTML = '<BR><BR><CENTER><IMG src="/static/img/progress.gif" height="50px"></CENTER>';
 
-      FloriaAjax.ajaxUrl("/"+state.basePath+"/svc/user/credits/usage?productId="+encodeURIComponent(state.productId)+"&days="+state.days+"&ts="+new Date().getTime(), "GET", null, function(data) {
+      FloriaAjax.ajaxUrl("/"+state.basePath+"/svc/wanda/credits/usage?productId="+encodeURIComponent(state.productId)+"&days="+state.days+"&ts="+new Date().getTime(), "GET", null, function(data) {
          // The panel may have been re-render()'d (different productIds, or the dialog closed/reopened) while
          // this request was in flight -- only apply the response if it is still the current state object.
          if (FloriaPayments.PlansDialog.UsageDashboard._state[cntId] !== state)
           return;
          state.items = (data && data.items) || [];
-         state.reference = null; // a fresh window/product invalidates any prior in-window filters
-         state.note = null;
+         state.itemType = null; // a fresh window/product invalidates any prior in-window filters
+         state.itemLabel = null;
          FloriaPayments.PlansDialog.UsageDashboard._paintFilterCombos(cntId);
          FloriaPayments.PlansDialog.UsageDashboard._paint(cntId);
          if (state._onFirstLoad != null)
@@ -961,22 +960,22 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       });
    },
 
-  /** (Re)builds BOTH the "Type" (reference) and dependent "Item" (notes) combos from the loaded window. */
+  /** (Re)builds BOTH the "Type" ({@code itemType}) and dependent "Item" ({@code itemLabel}) combos from the loaded window. */
   _paintFilterCombos: function(cntId)
    {
       let state = FloriaPayments.PlansDialog.UsageDashboard._state[cntId];
       let refs = [];
       for (let i = 0; i < state.items.length; ++i)
        {
-         let r = state.items[i].reference || "(uncategorized)";
+         let r = state.items[i].itemType || "(uncategorized)";
          if (refs.indexOf(r) < 0)
           refs.push(r);
        }
       refs.sort();
       let values = [["", "\u2014 all activity \u2014"]].concat(refs.map(function(r) { return [_paymentsEsc(r), _paymentsEsc(r)]; }));
-      state._filterCombo = new FloriaControls.ComboBox(cntId+"_UD_FILTER", cntId+"_UD_FILTER_v", values, null, _paymentsEsc(state.reference||""), function(el, val) {
-         state.reference = val || null;
-         state.note = null; // switching Type invalidates whatever specific item was picked under the old Type
+      state._filterCombo = new FloriaControls.ComboBox(cntId+"_UD_FILTER", cntId+"_UD_FILTER_v", values, null, _paymentsEsc(state.itemType||""), function(el, val) {
+         state.itemType = val || null;
+         state.itemLabel = null; // switching Type invalidates whatever specific item was picked under the old Type
          FloriaPayments.PlansDialog.UsageDashboard._paintItemCombo(cntId);
          FloriaPayments.PlansDialog.UsageDashboard._paint(cntId);
       }, true);
@@ -985,10 +984,10 @@ FloriaPayments.PlansDialog.UsageDashboard = {
    },
 
   /**
-   * (Re)builds the "Item" combo -- every distinct agent/flow/document (i.e. {@code notes}, falling back to
-   * the reference itself when a row has none) present under the currently-selected Type, or across the whole
-   * window when Type is "all activity". A search+select combo (not a plain dropdown) because this list can
-   * be long and its entries (document titles in particular) can be lengthy.
+   * (Re)builds the "Item" combo -- every distinct agent/flow/document (i.e. {@code itemLabel}, falling back to
+   * the {@code itemType} itself when a row has none) present under the currently-selected Type, or across the
+   * whole window when Type is "all activity". A search+select combo (not a plain dropdown) because this list
+   * can be long and its entries (document titles in particular) can be lengthy.
    */
   _paintItemCombo: function(cntId)
    {
@@ -997,17 +996,17 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       for (let i = 0; i < state.items.length; ++i)
        {
          let it = state.items[i];
-         let ref = it.reference || "(uncategorized)";
-         if (state.reference != null && ref != state.reference)
+         let ref = it.itemType || "(uncategorized)";
+         if (state.itemType != null && ref != state.itemType)
           continue;
-         let label = it.notes || ref;
+         let label = it.itemLabel || ref;
          if (labels.indexOf(label) < 0)
           labels.push(label);
        }
       labels.sort(function(a, b) { return a.localeCompare(b); });
       let values = [["", "\u2014 all items \u2014"]].concat(labels.map(function(l) { let e = _paymentsEsc(l); return [e, e, l]; }));
-      state._itemCombo = new FloriaControls.ComboBox(cntId+"_UD_ITEM", cntId+"_UD_ITEM_v", values, "Search by name\u2026", _paymentsEsc(state.note||""), function(el, val) {
-         state.note = val || null;
+      state._itemCombo = new FloriaControls.ComboBox(cntId+"_UD_ITEM", cntId+"_UD_ITEM_v", values, "Search by name\u2026", _paymentsEsc(state.itemLabel||""), function(el, val) {
+         state.itemLabel = val || null;
          FloriaPayments.PlansDialog.UsageDashboard._paint(cntId);
       }, true);
    },
@@ -1028,9 +1027,9 @@ FloriaPayments.PlansDialog.UsageDashboard = {
        return;
 
       let items = state.items.filter(function(it) {
-          if (state.reference != null && (it.reference || "(uncategorized)") != state.reference)
+          if (state.itemType != null && (it.itemType || "(uncategorized)") != state.itemType)
            return false;
-          if (state.note != null && (it.notes || (it.reference || "(uncategorized)")) != state.note)
+          if (state.itemLabel != null && (it.itemLabel || (it.itemType || "(uncategorized)")) != state.itemLabel)
            return false;
           return true;
         });
@@ -1038,15 +1037,15 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       if (items.length == 0)
        {
          body.innerHTML = '<BR><BR><CENTER style="color:#8a94a0;">No metered activity in the last '+state.days+' days'
-                         +(state.note!=null?' for "'+_paymentsEsc(state.note)+'"':state.reference!=null?' for "'+_paymentsEsc(state.reference)+'"':'')+'.</CENTER>';
+                         +(state.itemLabel!=null?' for "'+_paymentsEsc(state.itemLabel)+'"':state.itemType!=null?' for "'+_paymentsEsc(state.itemType)+'"':'')+'.</CENTER>';
          return;
        }
 
-      // ── Aggregate: by day (trend), by reference (hot-spot pie), by notes (item drill-down table) ──────────
+      // ── Aggregate: by day (trend), by itemType (hot-spot pie), by itemLabel (item drill-down table) ───────
       let totalSpent = 0;
       let byDay = {};
-      let byReference = {};
-      let byNotes = {};
+      let byItemType = {};
+      let byItemLabel = {};
       for (let i = 0; i < items.length; ++i)
        {
          let it = items[i];
@@ -1058,16 +1057,18 @@ FloriaPayments.PlansDialog.UsageDashboard = {
          let d = byDay[dayKey] || (byDay[dayKey] = { spent: 0, count: 0 });
          d.spent += amt; ++d.count;
 
-         let ref = it.reference || "(uncategorized)";
-         let r = byReference[ref] || (byReference[ref] = { spent: 0, count: 0 });
+         let ref = it.itemType || "(uncategorized)";
+         let r = byItemType[ref] || (byItemType[ref] = { spent: 0, count: 0 });
          r.spent += amt; ++r.count;
 
-         let label = it.notes || ref;
+         let label = it.itemLabel || ref;
          let key = ref + "\u0001" + label;
-         let n = byNotes[key] || (byNotes[key] = { reference: ref, label: label, spent: 0, count: 0, last: null });
+         // itemId is null on historical rows and is NOT part of the bucketing key (see this object's docs);
+         // we just keep the first non-null one seen as a drill-down handle for the detail table/CSV.
+         let n = byItemLabel[key] || (byItemLabel[key] = { itemType: ref, label: label, itemId: null, spent: 0, count: 0, last: null });
          n.spent += amt; ++n.count;
-         if (n.last == null || (dt != null && dt > n.last))
-          n.last = dt;
+         if (n.itemId == null && it.itemId != null)
+          n.itemId = it.itemId;
        }
 
       let dayKeys = Object.keys(byDay).sort();
@@ -1094,14 +1095,14 @@ FloriaPayments.PlansDialog.UsageDashboard = {
         ;
 
       FloriaPayments.PlansDialog.UsageDashboard._drawTrend(cntId, dayKeys, byDay);
-      FloriaPayments.PlansDialog.UsageDashboard._drawHotspotPie(cntId, byReference, state);
+      FloriaPayments.PlansDialog.UsageDashboard._drawHotspotPie(cntId, byItemType, state);
       FloriaPayments.PlansDialog.UsageDashboard._wireHotspotCards(cntId);
 
       // The detail table is built lazily (on first expand) rather than eagerly into a display:none host: some
       // chart/table libs mis-measure their own width when built inside a hidden element. It's rebuilt from
       // scratch on every _paint() (tableDrawn resets below), so toggling never shows stale/filtered-out rows.
       state._tableDrawn = false;
-      state._byNotesForTable = byNotes;
+      state._byItemLabelForTable = byItemLabel;
       let toggle = document.getElementById(cntId+"_UD_TOGGLE");
       let wrap = document.getElementById(cntId+"_UD_TABLEWRAP");
       if (toggle != null && wrap != null)
@@ -1111,15 +1112,15 @@ FloriaPayments.PlansDialog.UsageDashboard = {
            toggle.innerHTML = (show?'\u25b4':'\u25be')+' '+(show?'Hide':'Show')+' full activity breakdown';
            if (show == true && state._tableDrawn == false)
             {
-              FloriaPayments.PlansDialog.UsageDashboard._drawItemsTable(cntId, state._byNotesForTable);
+              FloriaPayments.PlansDialog.UsageDashboard._drawItemsTable(cntId, state._byItemLabelForTable);
               state._tableDrawn = true;
             }
          }, null, true);
    },
 
   /**
-   * Buckets the FULL (days/product-scoped, but Type/Item-filter-agnostic) item set by {@code reference}
-   * (e.g. "agents"/"flows"/"documents"), then by {@code notes} (falling back to the reference itself) within
+   * Buckets the FULL (days/product-scoped, but Type/Item-filter-agnostic) item set by {@code itemType}
+   * (e.g. "Agent"/"Flow"/"Document"), then by {@code itemLabel} (falling back to the itemType itself) within
    * each, keeping only the top 3 by spend per category -- this is deliberately capped at 3 (per the dashboard's
    * design goal of a quick "where is my money going" glance, not a full drill-down; the detail table below
    * covers the rest). Categories with zero activity simply never appear in the returned array, so a user who
@@ -1127,23 +1128,23 @@ FloriaPayments.PlansDialog.UsageDashboard = {
    */
   _hotspotsByCategory: function(items)
    {
-      let byRefNotes = {};
+      let byTypeLabel = {};
       for (let i = 0; i < items.length; ++i)
        {
          let it = items[i];
          let amt = Math.abs(Number(it.amount) || 0);
-         let ref = it.reference || "(uncategorized)";
-         let label = it.notes || ref;
-         let bucket = byRefNotes[ref] || (byRefNotes[ref] = {});
+         let ref = it.itemType || "(uncategorized)";
+         let label = it.itemLabel || ref;
+         let bucket = byTypeLabel[ref] || (byTypeLabel[ref] = {});
          let n = bucket[label] || (bucket[label] = { label: label, spent: 0, count: 0 });
          n.spent += amt; ++n.count;
        }
 
-      let categories = Object.keys(byRefNotes).map(function(ref) {
-          let entries = Object.keys(byRefNotes[ref]).map(function(l) { return byRefNotes[ref][l]; });
+      let categories = Object.keys(byTypeLabel).map(function(ref) {
+          let entries = Object.keys(byTypeLabel[ref]).map(function(l) { return byTypeLabel[ref][l]; });
           let total = entries.reduce(function(s, e) { return s + e.spent; }, 0);
           let top = entries.sort(function(a, b) { return b.spent - a.spent; }).slice(0, 3);
-          return { reference: ref, total: total, top: top };
+          return { itemType: ref, total: total, top: top };
         });
       categories.sort(function(a, b) { return b.total - a.total; });
       return categories;
@@ -1163,7 +1164,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
          let maxSpent = cat.top.length > 0 ? cat.top[0].spent : 0;
          html += '<DIV class="usageDashHotspotCard">'
                +   '<DIV class="usageDashHotspotCardHeader">'
-               +     '<SPAN class="usageDashHotspotCardTitle">'+_paymentsEsc(cat.reference)+'</SPAN>'
+               +     '<SPAN class="usageDashHotspotCardTitle">'+_paymentsEsc(cat.itemType)+'</SPAN>'
                +     '<SPAN class="usageDashHotspotCardTotal">'+fmt(Math.round(cat.total))+' credits</SPAN>'
                +   '</DIV>'
                +   '<DIV class="usageDashHotspotList">';
@@ -1171,7 +1172,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
           {
             let t = cat.top[i];
             let pct = maxSpent > 0 ? Math.max(4, Math.round(100*t.spent/maxSpent)) : 0;
-            html += '<DIV class="usageDashHotspotItem" data-reference="'+_paymentsEsc(cat.reference)+'" data-label="'+_paymentsEsc(t.label)+'">'
+            html += '<DIV class="usageDashHotspotItem" data-item-type="'+_paymentsEsc(cat.itemType)+'" data-label="'+_paymentsEsc(t.label)+'">'
                   +   '<DIV class="usageDashHotspotRank">'+(i+1)+'</DIV>'
                   +   '<DIV class="usageDashHotspotBody">'
                   +     '<DIV class="usageDashHotspotName" title="'+_paymentsEsc(t.label)+'">'+_paymentsEsc(t.label)+'</DIV>'
@@ -1198,10 +1199,10 @@ FloriaPayments.PlansDialog.UsageDashboard = {
           target = FloriaDOM.getAncestorNode(target, "DIV", "label");
           if (target == null)
            return;
-          let ref = target.dataset.reference;
+          let ref = target.dataset.itemType;
           let label = target.dataset.label;
           if (state._filterCombo != null)
-           state._filterCombo.setValue(ref); // fires Type onChange -> clears note, rebuilds Item combo, repaints
+           state._filterCombo.setValue(ref); // fires Type onChange -> clears the Item filter, rebuilds Item combo, repaints
           if (state._itemCombo != null)
            state._itemCombo.setValue(label);
         }, null, true);
@@ -1214,19 +1215,21 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       if (state == null)
        return;
       let items = state.items.filter(function(it) {
-          if (state.reference != null && (it.reference || "(uncategorized)") != state.reference)
+          if (state.itemType != null && (it.itemType || "(uncategorized)") != state.itemType)
            return false;
-          if (state.note != null && (it.notes || (it.reference || "(uncategorized)")) != state.note)
+          if (state.itemLabel != null && (it.itemLabel || (it.itemType || "(uncategorized)")) != state.itemLabel)
            return false;
           return true;
         });
       let esc = function(v) { v = v==null?"":String(v); return /[",\n]/.test(v) ? '"'+v.replaceAll('"','""')+'"' : v; };
-      let lines = ["Date,Type,Item,Credits"];
+      // Item Id is blank for historical rows (the column pre-dates itemId) -- exported anyway so a spreadsheet
+      // can be correlated back to specific objects going forward.
+      let lines = ["Date,Type,Item,Item Id,Credits"];
       for (let i = 0; i < items.length; ++i)
        {
          let it = items[i];
          let dt = FloriaDate.parseDateTime(it.created);
-         lines.push([dt==null?"":dt.printYYYYMMDD("-"), esc(it.reference||"(uncategorized)"), esc(it.notes||""), Math.round(Math.abs(Number(it.amount)||0))].join(","));
+         lines.push([dt==null?"":dt.printYYYYMMDD("-"), esc(it.itemType||"(uncategorized)"), esc(it.itemLabel||""), esc(it.itemId||""), Math.round(Math.abs(Number(it.amount)||0))].join(","));
        }
       let blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
       let a = document.createElement("a");
@@ -1269,12 +1272,12 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       chart.draw();
    },
 
-  _drawHotspotPie: function(cntId, byReference, state)
+  _drawHotspotPie: function(cntId, byItemType, state)
    {
-      let refs = Object.keys(byReference).sort(function(a, b) { return byReference[b].spent - byReference[a].spent; });
+      let refs = Object.keys(byItemType).sort(function(a, b) { return byItemType[b].spent - byItemType[a].spent; });
 
       // Top 6 + "Other": enough to be genuinely useful without turning into an unreadable rainbow of slivers
-      // for a heavy user with dozens of distinct cost types (reference buckets).
+      // for a heavy user with dozens of distinct cost types (itemType buckets).
       const MAX_SLICES = 6;
       let labels = [];
       let values = [];
@@ -1284,10 +1287,10 @@ FloriaPayments.PlansDialog.UsageDashboard = {
          if (i < MAX_SLICES)
           {
             labels.push(refs[i]);
-            values.push(Math.round(byReference[refs[i]].spent));
+            values.push(Math.round(byItemType[refs[i]].spent));
           }
          else
-          otherSpent += byReference[refs[i]].spent;
+          otherSpent += byItemType[refs[i]].spent;
        }
       if (otherSpent > 0)
        {
@@ -1325,15 +1328,18 @@ FloriaPayments.PlansDialog.UsageDashboard = {
       chart.draw();
    },
 
-  _drawItemsTable: function(cntId, byNotes)
+  _drawItemsTable: function(cntId, byItemLabel)
    {
-      let rows = Object.keys(byNotes).map(function(k) { return byNotes[k]; })
+      let rows = Object.keys(byItemLabel).map(function(k) { return byItemLabel[k]; })
                         .sort(function(a, b) { return b.spent - a.spent; })
                         .slice(0, 25); // top 25 is plenty for a hot-spots drill-down; the trend/pie above already summarize the rest.
 
       let cols = [
-         { field: "label"    , label: "Item / Activity", type: "string" , sortable: true, wrap: "nowrap", maxWidth: "480px" }
-        ,{ field: "reference", label: "Type"           , type: "string" , sortable: true }
+         { field: "label"    , label: "Item / Activity", type: "string" , sortable: true, wrap: "nowrap", maxWidth: "480px"
+          // itemId (null for historical rows) rides along as a tooltip rather than its own column: it's an
+          // opaque id, useful when correlating a line back to a specific object, but not worth grid real estate.
+          ,renderer: function(row) { return row.itemId == null ? _paymentsEsc(row.label) : '<SPAN title="id: '+_paymentsEsc(row.itemId)+'">'+_paymentsEsc(row.label)+'</SPAN>'; } }
+        ,{ field: "itemType" , label: "Type"           , type: "string" , sortable: true }
         ,{ gap: true, minWidth: "1em" }
         ,{ field: "count"    , label: "Count"          , type: "integer", sortable: true, align: "right", summary: true }
         ,{ field: "spent"    , label: "Credits"        , type: "string" , sortable: true, align: "right", summary: true, preSorted: "desc"
@@ -1352,7 +1358,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
 
 
 
-
+
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Credit balance gauge (embeddable "credit meter" widget)
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1370,7 +1376,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
  * ("creditGaugeFill--low/mid/high"), and the actual colors live in module-login.css so a host app can restyle
  * them (or override the CSS custom properties they're built from) without touching this file.
  * <P>
- * Balance data comes from {@code /svc/user/credits/balance}, which is backed server-side by CreditHelper's
+ * Balance data comes from {@code /svc/wanda/credits/balance}, which is backed server-side by CreditHelper's
  * small, bounded, short-TTL cache (see CreditHelper.getSnapshot on the Wanda side) -- safe to poll/re-render
  * fairly often without putting real load on the database.
  */
@@ -1429,7 +1435,7 @@ FloriaPayments.CreditGauge = {
          host.removeAttribute("title");
        }
 
-      FloriaAjax.ajaxUrl("/"+basePath+"/svc/user/credits/balance?productId="+encodeURIComponent(productId), "GET", null, function(data) {
+      FloriaAjax.ajaxUrl("/"+basePath+"/svc/wanda/credits/balance?productId="+encodeURIComponent(productId), "GET", null, function(data) {
          FloriaPayments.CreditGauge._paint(hostDivId, data);
          FloriaPayments.CreditGauge._maybeShowTrialWelcome(productId, data);
       }, function(code, msg, errors) {
@@ -1554,7 +1560,7 @@ FloriaPayments.CreditGauge = {
   /**
    * Opens the full Usage Dashboard (FloriaPayments.PlansDialog.UsageDashboard, via
    * {@link FloriaPayments.PlansDialog#showUsage}), pre-focused on this gauge's own product. This is the real
-   * implementation of what was previously a "feature coming soon" placeholder: {@code /svc/user/credits/usage}
+   * implementation of what was previously a "feature coming soon" placeholder: {@code /svc/wanda/credits/usage}
    * (see UserCreditsUsage.java) backs the whole dashboard -- trend, cost-breakdown pie and item-level hot
    * spots -- from a single call, so there is no separate popup/dialog owned by CreditGauge itself any more.
    */
