@@ -42,6 +42,34 @@
 
 /*********************************************************
   Modal Dialog  (FloriaDialog)
+
+  THEMING CONTRACT: every visual property below is expressed as a --dlg-* custom property, each
+  with a fallback equal to the ORIGINAL literal it replaced -- so a page that does nothing
+  (no skin class, no --dlg-* overrides) renders byte-for-byte identical to before this contract
+  existed. There is deliberately NO skin defined here (no "dark"/"emerald"/etc. block) -- see
+  module-dialog.js's `setFloriaDialogSkin()` doc comment for the full mechanism. A host app opts
+  in by declaring its own `.modalDialog--<skinName> { --dlg-...: ...; }` block (in ITS OWN
+  stylesheet) redeclaring whichever of these tokens it wants to change; FloriaDialog adds that
+  "modalDialog--<skinName>" class automatically once `setFloriaDialogSkin("<skinName>")` has been
+  called. Multiple unrelated skins (one per brand/app) can coexist with zero risk of clashing,
+  since each is entirely namespaced under its own class name chosen by that app.
+
+  Tokens (all optional -- omit any a skin doesn't need to change):
+    --dlg-bg                 : .modalDialog's own background (fallback: white)
+    --dlg-radius             : .modalDialog's outer border-radius (fallback: 24px 24px 18px 18px)
+    --dlg-title-gradient     : .modalTitle's background (fallback: same as legacy --modalTitleGradient)
+    --dlg-title-color        : .modalTitle's text color (fallback: #203040)
+    --dlg-title-radius       : .modalTitle's border-radius (fallback: 8px 8px 0 0)
+    --dlg-title-shadow       : .modalTitle's box-shadow (fallback: 0 1px 2px rgba(0,0,0,0.1))
+    --dlg-close-color        : the close ("X") icon's color (fallback: #666, ~opacity 0.7 via the icon itself)
+    --dlg-content-bg         : .modalContent's background (fallback: #FFFFFF)
+    --dlg-content-radius     : .modalContent's border-radius (fallback: 0 0 18px 18px)
+
+  Per-dialog-ID overrides (e.g. capsico.css's "#DLG_POPUPLOGIN .modalTitle { background: ...; }"
+  for the Login/Signup/Account family's pink/red branded title bar) keep working unconditionally on
+  top of any skin: an ID selector always outranks a class-based ".modalDialog--<skin> ..." rule in
+  specificity, however many classes the skin adds, so those dialogs' distinct look can never be
+  clobbered by a page-wide skin even where one is otherwise in effect.
 **********************************************************/
 .modalBackground {
     position: fixed;
@@ -57,8 +85,8 @@
 }
 .modalDialog {
    position: absolute;
-   background-color: white;
-   border-radius: 24px 24px 18px 18px;
+   background-color: var(--dlg-bg, white);
+   border-radius: var(--dlg-radius, 12px 12px 18px 18px);
    opacity: 0;
    transition: top 0.4s cubic-bezier(.55,.06,.68,.19)
              , opacity 0.5s cubic-bezier(.55,.06,.68,.19)
@@ -76,13 +104,15 @@
      is vivid and meant for white text on a full-bleed card header, so it's toned WAY down here (mixed heavily
      toward white, desaturated) rather than reused as-is: a dialog title bar is a much smaller, ever-present
      UI chrome element sitting right above dark (#203040) text, so it needs to read as a gentle wash of color,
-     not a bright accent block. */
-  background: var(--modalTitleGradient, linear-gradient(#f9fbfd, #cdeee2));
-  color: #203040;
+     not a bright accent block. --dlg-title-gradient (new, additive) takes precedence over the older
+     --modalTitleGradient if both happen to be set, so existing host apps' :root-level --modalTitleGradient
+     declarations keep working unchanged. */
+  background: var(--dlg-title-gradient, var(--modalTitleGradient, linear-gradient(#f9fbfd, #cdeee2)));
+  color: var(--dlg-title-color, #203040);
   font-weight: 600;
   font-size: 1.75rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-  border-radius: 8px 8px 0px 0px;
+  box-shadow: var(--dlg-title-shadow, 0 1px 2px rgba(0,0,0,0.1));
+  border-radius: var(--dlg-title-radius, 8px 8px 0px 0px);
 }
 
 .modalTitle > span:nth-child(1) {
@@ -99,14 +129,20 @@
   cursor:pointer;
 }
 
+/* Close ("X") icon: an inline SVG mask (not a PNG background-image) so its color follows
+   --dlg-close-color like every other themed part of the dialog -- a dark skin just repoints one
+   token instead of needing its own icon asset. mask-image (not a plain <img>/background-image)
+   is what makes "the icon's color = currentColor/--dlg-close-color" possible in the first place. */
 .modalTitle > span:nth-child(2),
 .modalTitle .modalClose {
   width: 28px;
   height: 28px;
-  background: url('/static/img/cross_icon.png') center/18px no-repeat;
+  background-color: var(--dlg-close-color, #666);
   opacity: 0.7;
   cursor: pointer;
   transition: opacity 0.2s ease, transform 0.25s ease;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6L18 18M18 6L6 18" stroke="black" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>') center/18px no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6L18 18M18 6L6 18" stroke="black" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>') center/18px no-repeat;
 }
 .modalTitle > span:nth-child(2):hover,
 .modalTitle .modalClose:hover {
@@ -120,14 +156,15 @@
     bottom: 0px;
     left: 1em;
     right: .25em;
-    background-color: #FFFFFF;
+    background-color: var(--dlg-content-bg, #FFFFFF);
     /* padding: 0.25em; */
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
     transform: translateZ(0px);
-    border-radius: 0px 0px 18px 18px;
+    border-radius: var(--dlg-content-radius, 0px 0px 18px 18px);
 }
+
 
 @media only screen and (max-width: 1600px) {
   .modalTitle {
@@ -777,7 +814,45 @@
 
 
 /*********************************************************
-  Tab Help Icon + Popover (FloriaTabs' optional helpUrl)
+  Closable tabs (FloriaTabs' options.closable / tabs[i].closable + onCloseRequested) and
+  reorderable tabs (options.reorderable) — see module-dialog.js's constructor jsdoc + addTab()/
+  removeTab()/_moveTab() for the incremental-DOM contract these pair with (never a full re-render).
+**********************************************************/
+.tabContainer > .tabHeader SPAN[data-tabid] .tabCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  margin-left: 0.5em;
+  border-radius: 50%;
+  font-size: 0.95em;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.55;
+  vertical-align: middle;
+}
+
+.tabContainer > .tabHeader SPAN[data-tabid] .tabCloseBtn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.tabContainer--modern > .tabHeader SPAN[data-tabid] .tabCloseBtn:hover {
+  background: color-mix(in oklab, var(--tabs-accent, #1E3A5F) 16%, transparent);
+}
+
+/* Drag-and-drop reorder affordances (options.reorderable) — a lighter-weight cue than a full
+   drop-indicator line, consistent with how little other chrome this component otherwise has. */
+.tabContainer > .tabHeader SPAN[draggable="true"] {
+  cursor: grab;
+}
+
+.tabContainer > .tabHeader SPAN.tabDragOver {
+  box-shadow: inset 2px 0 0 0 var(--tabs-accent, #1a3d5d);
+}
+
+
 
   ".tabHelpIcon" — the small "(?)" affordance rendered to the right of the tab headers when a
   FloriaTabs is constructed with a helpUrl. Absolutely positioned against ".tabHeader" (given
@@ -821,6 +896,13 @@ SPAN.tabHelpIcon {
   line-height: 1;
   vertical-align: middle;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* Otherwise WINS over the browser's default "[hidden] { display: none }" -- "SPAN.tabHelpIcon" (an
+   element+class selector) outranks a bare attribute selector on specificity, so a host toggling the
+   "hidden" attribute on one of these (e.g. Flow Center's own (i) "About" icon -- see that app's
+   main.js) would otherwise keep seeing it rendered as an empty circle. */
+SPAN.tabHelpIcon[hidden] {
+  display: none;
 }
 SPAN.tabHelpIcon:hover {
   background: #4f6fb0;

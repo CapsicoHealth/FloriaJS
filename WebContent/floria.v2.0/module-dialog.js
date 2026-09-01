@@ -41,7 +41,49 @@ function printDialogStack()
 //    console.log(""+i+__DIALOGS[i]._md.id+" ("+__DIALOGS[i]._md.style.display+")");
  }
 
-export function FloriaDialog(elementId)
+/* ---- FloriaDialog skins -------------------------------------------------------------------
+ * FloriaDialog is used EVERYWHERE (every app, every popup), so per-call-site skinning would mean
+ * touching dozens of scattered `new FloriaDialog(id)` call sites across many repos every time an
+ * app wants its own look. Instead, a host app sets ONE global default, once, as early as possible
+ * (e.g. its own main.js/entry point): `setFloriaDialogSkin("emerald")`. From then on, EVERY
+ * FloriaDialog shown on that page (no matter which module/repo constructs it -- capsensa's own
+ * project-manage.js, module-organizations.js, etc.) picks it up automatically, by having a
+ * `modalDialog--<skin>` class added to its own `.modalDialog` element right before it's shown.
+ *
+ * There is deliberately NO hard-coded skin definition anywhere in this file or module-dialog.css
+ * — "emerald"/"violet"/"steelblue"/whatever is just a class-name suffix the CALLER invents; the
+ * actual color values for that skin are declared by the host app's own stylesheet as
+ * `.modalDialog--<skin> { --dlg-...: ...; }`, following module-dialog.css's own `--dlg-*` token
+ * contract (documented there). This mirrors how ".tabContainer--modern" only supplies FloriaTabs'
+ * *shared* skin, and how --modalTitleGradient already lets a host app re-theme just the title bar
+ * — this simply generalizes that same "host app declares the token values" idea to a whole
+ * dialog, keyed by a whole class instead of one property, so multiple distinct skins (e.g. one per
+ * brand) can all coexist without clashing.
+ *
+ * A specific dialog can opt OUT of the page's global default (e.g. module-login.js's Login/Signup/
+ * ForgotPassword/SetPassword/Account popups, which must keep their existing branded look --
+ * see their own `#DLG_POPUPLOGIN`/`#DLG_POPUP_ACCOUNT` ID-level overrides in capsico.css --
+ * regardless of whatever skin the host app has set) by passing `{ skin: false }` as FloriaDialog's
+ * second constructor argument. Passing an explicit skin NAME there instead pins that one dialog to
+ * a specific skin irrespective of the page default (rarely needed, but available). Per-ID overrides
+ * like `#DLG_POPUPLOGIN .modalTitle` in capsico.css keep working unconditionally either way: an ID
+ * selector always outranks a class-based skin rule in specificity, no matter how many classes the
+ * skin adds, so those dialogs' branded title bar can never be clobbered by a global skin even if
+ * one *were* applied to them.
+ * ------------------------------------------------------------------------------------------- */
+var __defaultDialogSkin = null;
+
+/** Sets the page-wide default FloriaDialog skin (a class-name suffix, e.g. "emerald") applied to
+ * every FloriaDialog shown from now on, unless that particular dialog was constructed with an
+ * explicit `{ skin: ... }` override (including `{ skin: false }` to opt out entirely). Call this
+ * once, as early as possible in the host app's own startup code -- before any dialog's first
+ * show() -- so every dialog (including ones constructed by shared/imported modules) picks it up. */
+export function setFloriaDialogSkin(skin)
+ {
+   __defaultDialogSkin = skin || null;
+ }
+
+export function FloriaDialog(elementId, opts)
  {
    this._e = document.getElementById("FLORIA_DLG_BG");
    if (this._e == null)
@@ -62,7 +104,14 @@ export function FloriaDialog(elementId)
                          ;
       this._e.appendChild(this._md);
     }
-   
+
+   // undefined (no opts.skin passed) => always inherit whatever the page-wide default is AT SHOW
+   // TIME (see show() below) -- resolved lazily rather than here, so a setFloriaDialogSkin() call
+   // that happens after this dialog was constructed (but before its first show()) still applies.
+   // An explicit `false`/`null` opts out permanently for this dialog; an explicit string pins it.
+   this._skinOverride = (opts != null && "skin" in opts) ? (opts.skin || false) : undefined;
+   this._skinClass = null; // currently-applied "modalDialog--<skin>" class, if any, tracked so show() can swap it cleanly
+
    this._closeable = true;
 
    var that = this;
@@ -106,7 +155,21 @@ export function FloriaDialog(elementId)
        return setTimeout(function() { that.show(title, url, w, h, contents, true); }, 300); // 500 is the hiding delay, so we undershoot a little
       else
        __hiding = false;
-       
+
+      // Resolve + (re)apply the effective skin class every time we show, not just at construction,
+      // so a setFloriaDialogSkin() call made any time before this particular show() still takes
+      // effect (see the "FloriaDialog skins" comment above FloriaDialog for the full contract).
+      var effectiveSkin = this._skinOverride !== undefined ? this._skinOverride : __defaultDialogSkin;
+      var newSkinClass = effectiveSkin ? "modalDialog--"+effectiveSkin : null;
+      if (newSkinClass != this._skinClass)
+       {
+         if (this._skinClass != null)
+          this._md.classList.remove(this._skinClass);
+         if (newSkinClass != null)
+          this._md.classList.add(newSkinClass);
+         this._skinClass = newSkinClass;
+       }
+
       var repaint = false;
       if (__DIALOGS.length > 0)
        {
@@ -677,8 +740,33 @@ export function FloriaHelpPopover(anchorElementId, helpUrl, tooltipClass)
     "left"/"right", with each tab's label text rotated to run vertically (-90deg on the left,
     so it reads bottom-to-top; +90deg on the right, so it reads top-to-bottom), and "bottom"
     simply reorders the same top layout to the other edge.
+
+ options (optional): additive, backward-compatible extras for hosts that need to manage a DYNAMIC
+    set of tabs at runtime (e.g. one browser-style tab per open document/flow) without ever losing
+    an already-mounted tab's live content — see addTab()/removeTab() below, both of which patch the
+    DOM incrementally (new/removed header SPAN + panel DIV only) rather than calling show() again,
+    since show() rebuilds EVERY panel DIV from scratch and would otherwise destroy any already-
+    mounted tab's content (an in-progress chat session, scroll position, etc.) the moment a SIBLING
+    tab is merely added or removed.
+    { closable    : true|false  — per-tab default (see tabs[i].closable, which wins if set) for
+                                   whether a tab shows a "×" close affordance in its header.
+     ,onCloseRequested(idx, tab) — called instead of removing the tab outright when its "×" is
+                                   clicked (or reorderable is used to drop it on a trashcan, etc.).
+                                   Fully in charge of deciding whether/when to actually remove it —
+                                   typically shows its own confirm dialog (e.g. FloriaAlertSimple)
+                                   and calls floriaTabsInstance.removeTab(idx) once confirmed. If
+                                   omitted, a "×" click removes the tab immediately, no questions
+                                   asked.
+     ,reorderable : true|false  — enables native HTML5 drag-and-drop reordering of tab headers
+                                   (mouse/touch drag the header strip itself). Purely a DOM move of
+                                   the existing header SPAN + panel DIV (via _syncTabOrder() below),
+                                   never a re-render, so no mounted tab's content is disturbed.
+     ,onReorder(tabsArray)      — called after a successful drag-reorder with the new `tabs` array
+                                   (same object identities, new order) — e.g. to persist the new
+                                   order somewhere.
+    }
  */
-export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, skin, helpUrl, position)
+export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, skin, helpUrl, position, options)
  {
    this._elementId = elementId;
    this._tabs = tabs;
@@ -688,11 +776,34 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
    this._position = (position == null || position == "top") ? "top" : position;
    this._posClass = this._position != "top" ? " tabContainer--pos-"+this._position : "";
    this._helpUrl = helpUrl || null;
+   this._options = options || {};
+   this._reorderable = this._options.reorderable === true;
+   this._dragFromUid = null;
    // The help popover itself is not special to FloriaTabs — see FloriaHelpPopover above, which owns
    // all of the fetch/cache/anchor/dismiss behavior. FloriaTabs merely renders the ".tabHelpIcon"
    // anchor (in show(), below) and points one of these at it.
    this._help = this._helpUrl == null ? null : new FloriaHelpPopover(elementId+"_TABHELP", this._helpUrl);
    this._showHelp = function() { this._help?.show(); };
+
+   // Stable identity for a tab OBJECT, independent of its current position in this._tabs (which
+   // changes on add/remove/reorder) — lets DOM elements be found/renumbered by WHICH tab they
+   // belong to rather than by a position that may have just shifted. Assigned once, lazily, and
+   // never regenerated — see show()/addTab() below, both of which call this for every tab they render.
+   this._uidOf = function(t)
+    {
+      if (t._uid == null)
+       t._uid = 'ftab_'+Math.random().toString(36).slice(2, 9);
+      return t._uid;
+    }
+
+   // Builds ONE tab header SPAN's innerHTML (label + optional "×" close affordance) — shared by
+   // show() (initial render of every visible tab) and addTab() (a single new one), so the two never
+   // drift out of sync.
+   this._headerInnerHtml = function(t)
+    {
+      var closable = t.closable != null ? t.closable === true : this._options.closable === true;
+      return t.label + (closable ? '<SPAN class="tabCloseBtn" data-tabclose="1" title="Close">&times;</SPAN>' : '');
+    }
 
    this.show = function(defaultTabId = 0)
     {
@@ -702,9 +813,10 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
          var t = this._tabs[i];
          if (t.hide == true)
           continue;
-         str+='<SPAN id="'+elementId+'_TABHEADER_'+i+'" data-tabid="'+i+'" data-contextTarget="1"'
+         str+='<SPAN id="'+elementId+'_TABHEADER_'+i+'" data-tabid="'+i+'" data-uid="'+this._uidOf(t)+'" data-contextTarget="1"'
+             +(this._reorderable ? ' draggable="true"' : '')
              +(t._status!=null?' data-tabstatus="'+t._status+'"':'')
-             +' title="'+(t.descr==null?"":t.descr.printHtmlAttrValue())+'">'+t.label+'</SPAN>';
+             +' title="'+(t.descr==null?"":t.descr.printHtmlAttrValue())+'">'+this._headerInnerHtml(t)+'</SPAN>';
 
        }
       if (this._helpUrl != null)
@@ -718,20 +830,33 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
           current = i;
          t._renderCount = 0;
          if (this._singleDiv == false || i == 0)
-          str+='<DIV id="'+elementId+'_TABPANEL_'+i+'"></DIV>';
+          str+='<DIV id="'+elementId+'_TABPANEL_'+i+'" data-uid="'+this._uidOf(t)+'"></DIV>';
        }
       str+='</DIV></DIV>';
       FloriaDOM.setInnerHTML(elementId, str);
 
       var that = this;
-      setTimeout(function() { that.select(current); }, 10);
+      // Guard added for hosts that start with an EMPTY tabs array and grow it dynamically via
+      // addTab() (e.g. one tab per open document) — select(0) on an empty array would throw.
+      if (this._tabs.length > 0)
+       setTimeout(function() { that.select(current); }, 10);
 
       FloriaDOM.addEvent(elementId+"_TABHEADERS", "click", function(e, event, target) {
+        if (target.dataset.tabclose != null)
+         {
+           event.preventDefault();
+           event.stopPropagation();
+           that._requestClose(1*target.parentElement.dataset.tabid);
+           return;
+         }
         var tabId = target.dataset.tabid;
         if (tabId == null)
          return; // click landed on the header strip itself (or the help icon — handled separately below), not a tab
         that.select(tabId);
       }, null, true);
+
+      if (this._reorderable)
+       this._wireReorder();
 
       if (this._helpUrl != null)
        FloriaDOM.addEvent(elementId+"_TABHELP", "click", function(e, event, target) {
@@ -849,7 +974,174 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       this._tabs[idx].label = newLabel;
       var headerEl = document.getElementById(elementId+'_TABHEADER_'+idx);
       if (headerEl != null)
-       headerEl.innerHTML = newLabel;
+       headerEl.innerHTML = this._headerInnerHtml(this._tabs[idx]);
+    }
+
+   /**
+    * Appends ONE new tab at the end and mounts it — an incremental DOM append (one new header SPAN,
+    * one new panel DIV), never a call to show(), so every ALREADY-mounted tab's panel content (a live
+    * chat session, scroll position, form state, ...) is left completely undisturbed. See this
+    * function's own docs in the constructor's "options" jsdoc above for why this matters.
+    *
+    *   tabDef  - same shape as one entry of the `tabs` constructor array (label, descr, closable,
+    *             onSelectHandler, onHideHanler, ...).
+    *   opts.select - whether to immediately select the new tab (default true).
+    * Returns the new tab's index.
+    */
+   this.addTab = function(tabDef, opts)
+    {
+      opts = opts || {};
+      var idx = this._tabs.length;
+      this._tabs.push(tabDef);
+
+      var headerContainer = document.getElementById(elementId+"_TABHEADERS");
+      var span = document.createElement("SPAN");
+      span.id = elementId+'_TABHEADER_'+idx;
+      span.dataset.tabid = idx;
+      span.dataset.uid = this._uidOf(tabDef);
+      span.dataset.contexttarget = "1";
+      if (this._reorderable) span.draggable = true;
+      if (tabDef.descr) span.title = tabDef.descr;
+      span.innerHTML = this._headerInnerHtml(tabDef);
+      var helpIcon = document.getElementById(elementId+"_TABHELP");
+      if (helpIcon != null) headerContainer.insertBefore(span, helpIcon);
+      else headerContainer.appendChild(span);
+
+      var bodyEl = document.querySelector('#'+elementId+' > .tabContainer > .tabBody');
+      var panel = document.createElement("DIV");
+      panel.id = elementId+'_TABPANEL_'+idx;
+      panel.dataset.uid = this._uidOf(tabDef);
+      bodyEl.appendChild(panel);
+
+      tabDef._renderCount = 0;
+      if (opts.select !== false)
+       this.select(idx);
+      return idx;
+    }
+
+   // Host-owned close confirmation hook — see this._options.onCloseRequested's own docs above.
+   // Defaults to removing the tab immediately when no host hook is supplied.
+   this._requestClose = function(idx)
+    {
+      var tab = this._tabs[idx];
+      if (tab == null) return;
+      if (this._options.onCloseRequested != null)
+       this._options.onCloseRequested(idx, tab);
+      else
+       this.removeTab(idx);
+    }
+
+   /**
+    * Removes one tab's header + panel from the DOM (WITHOUT touching any other tab's panel content)
+    * and selects a sensible neighbor if the removed tab was the active one. See addTab()'s docs
+    * above for why this is careful to only ever move/renumber wrapper elements, never re-render.
+    */
+   this.removeTab = function(tabIdOrLabel)
+    {
+      var idx = this._resolveTabIndex(tabIdOrLabel);
+      if (idx == null) return;
+      var tab = this._tabs[idx];
+      if (this._currentTabId === idx && tab.onHideHanler != null)
+       tab.onHideHanler(elementId+'_TABPANEL_'+idx);
+
+      document.getElementById(elementId+'_TABHEADER_'+idx)?.remove();
+      document.getElementById(elementId+'_TABPANEL_'+idx)?.remove();
+      this._tabs.splice(idx, 1);
+
+      // Renumber every tab AFTER the removed one down by one — cheap attribute/id updates only,
+      // the elements (and everything mounted inside their panel) are otherwise left completely alone.
+      for (var i = idx; i < this._tabs.length; i++)
+       {
+         var h = document.getElementById(elementId+'_TABHEADER_'+(i+1));
+         var p = document.getElementById(elementId+'_TABPANEL_'+(i+1));
+         if (h != null) { h.id = elementId+'_TABHEADER_'+i; h.dataset.tabid = i; }
+         if (p != null) p.id = elementId+'_TABPANEL_'+i;
+       }
+
+      if (this._currentTabId == null) return;
+      if (this._currentTabId === idx)
+       {
+         this._currentTabId = null;
+         var next = Math.min(idx, this._tabs.length - 1);
+         if (next >= 0) this.select(next);
+       }
+      else if (this._currentTabId > idx)
+       this._currentTabId -= 1; // shifted down by the renumbering above; already-applied "selected" CSS follows the element, not the id
+    }
+
+   // Wires native HTML5 drag-and-drop reordering of the header strip — see this._options.reorderable's
+   // docs above. Only ever MOVES the existing header SPAN + panel DIV (via _moveTab below), never
+   // recreates them, so no mounted tab's content is disturbed by a reorder.
+   this._wireReorder = function()
+    {
+      var that = this;
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "dragstart", function(e, event, target) {
+        if (target.dataset.uid == null) { event.preventDefault(); return; }
+        that._dragFromUid = target.dataset.uid;
+        event.dataTransfer.effectAllowed = "move";
+        try { event.dataTransfer.setData("text/plain", target.dataset.uid); } catch (ex) {}
+      }, null, true);
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "dragover", function(e, event, target) {
+        if (target.dataset.uid == null) return;
+        event.preventDefault();
+        FloriaDOM.addCSS(target.id, "tabDragOver");
+      }, null, true);
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "dragleave", function(e, event, target) {
+        if (target.dataset.uid == null) return;
+        FloriaDOM.removeCSS(target.id, "tabDragOver");
+      }, null, true);
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "drop", function(e, event, target) {
+        if (target.dataset.uid == null) return;
+        event.preventDefault();
+        FloriaDOM.removeCSS(target.id, "tabDragOver");
+        var fromUid = that._dragFromUid;
+        that._dragFromUid = null;
+        if (fromUid == null || fromUid === target.dataset.uid) return;
+        that._moveTab(fromUid, target.dataset.uid);
+      }, null, true);
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "dragend", function(e, event, target) {
+        that._dragFromUid = null;
+      }, null, true);
+    }
+
+   // Reorders this._tabs (moving the tab identified by fromUid to just before the tab identified by
+   // toUid) and physically moves its header SPAN + panel DIV to match — a DOM MOVE (insertBefore),
+   // never a removal/recreation, so the tab's mounted content is untouched. Every tab's id/data-tabid
+   // is then renumbered to match the new order (cheap attribute updates only).
+   this._moveTab = function(fromUid, toUid)
+    {
+      var fromIdx = this._tabs.findIndex(function(t) { return t._uid === fromUid; });
+      var toIdx   = this._tabs.findIndex(function(t) { return t._uid === toUid;   });
+      if (fromIdx < 0 || toIdx < 0) return;
+      var wasCurrentTab = this._currentTabId != null ? this._tabs[this._currentTabId] : null;
+
+      var moved = this._tabs.splice(fromIdx, 1)[0];
+      this._tabs.splice(toIdx, 0, moved);
+
+      var headerContainer = document.getElementById(elementId+"_TABHEADERS");
+      var bodyEl = document.querySelector('#'+elementId+' > .tabContainer > .tabBody');
+      var fromHeaderEl = headerContainer.querySelector('[data-uid="'+fromUid+'"]');
+      var toHeaderEl = headerContainer.querySelector('[data-uid="'+toUid+'"]');
+      var fromPanelEl = bodyEl.querySelector('[data-uid="'+fromUid+'"]');
+      var toPanelEl = bodyEl.querySelector('[data-uid="'+toUid+'"]');
+      if (fromIdx < toIdx)
+       { toHeaderEl.after(fromHeaderEl); toPanelEl.after(fromPanelEl); }
+      else
+       { toHeaderEl.before(fromHeaderEl); toPanelEl.before(fromPanelEl); }
+
+      for (var i = 0; i < this._tabs.length; i++)
+       {
+         var uid = this._uidOf(this._tabs[i]);
+         var h = headerContainer.querySelector('[data-uid="'+uid+'"]');
+         var p = bodyEl.querySelector('[data-uid="'+uid+'"]');
+         if (h != null) { h.id = elementId+'_TABHEADER_'+i; h.dataset.tabid = i; }
+         if (p != null) p.id = elementId+'_TABPANEL_'+i;
+       }
+
+      if (wasCurrentTab != null)
+       this._currentTabId = this._tabs.indexOf(wasCurrentTab);
+
+      this._options.onReorder?.(this._tabs);
     }
 
    this.select = function(i)
@@ -857,6 +1149,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       var self = this; // captured so the setStatus closure passed to onSelectHandler below (a plain
                         // function, not an arrow function) can still reach this FloriaTabs instance
                         // after `this` itself is no longer in scope for it.
+      i = 1*i;
       var t = this._tabs[i];
       if (t._renderCount == null)
        t._renderCount = 0;
@@ -892,7 +1185,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       if (t._status == "success" || t._status == "failure")
        this.setTabStatus(i, null);
 
-      if (this._currentTabId != null)
+      if (this._currentTabId != null && this._currentTabId !== i && this._tabs[this._currentTabId] != null)
        {
          FloriaDOM.removeCSS(elementId+'_TABHEADER_'+this._currentTabId, "selected");
          FloriaDOM.removeCSS(elementId+'_TABPANEL_'+this._currentTabId, "selected");
@@ -911,6 +1204,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       this._currentTabId = i;
     }
  };
+
 
 
 
