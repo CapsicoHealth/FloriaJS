@@ -17,11 +17,101 @@
 /* ============================================================
    module-login.css
    Styles for the components implemented in module-login.js, in particular
-   FloriaLogin.PopupOrganizations (the "Your Organizations" management popup).
+   FloriaLogin.PopupOrganizations (the "Your Organizations" management popup),
+   and shared by module-organizations.js's FloriaOrgs.PopupOrganizations /
+   FloriaOrgs.PopupProjects (the "Manage Project" dialog).
    Self-contained: doesn't rely on any host-app class (e.g. "buttonLogin"),
    only on the CSS custom properties a host app *may* already define, all of
    which have sensible fallbacks so this renders reasonably anywhere.
+
+   THEMING / OVERRIDE CONTRACT (florg* rules only -- NOT the Plans/Billing/Usage-
+   Dashboard/CreditGauge rules further below, which are a separate, older surface):
+   every color is read through one of the "--florg-*" custom properties declared in
+   the :root block right below (same convention as module-tables.css's "--ftbl-*").
+   A host app that wants to re-skin these components (e.g. a dark-themed app opening
+   the "Manage Project"/"Manage Organization" dialog) only needs to redeclare any
+   subset of these on an ancestor of wherever the dialog mounts -- since FloriaDialog
+   mounts on <body> outside any app-specific container, the natural ancestor to
+   target is the dialog's own skin class (see module-dialog.js's setFloriaDialogSkin()
+   / module-dialog.css's --dlg-* contract): e.g.
+     .modalDialog--emerald { --florg-input-bg: ...; --florg-btn-bg: ...; ... }
+   Fallback values baked into every var(...) call keep this file rendering sensibly
+   with no host override present.
    ============================================================ */
+:root {
+  --florg-heading-color:            #203040;
+  --florg-heading-border:           #e4e7eb;
+  --florg-muted-color:              #77828c;
+
+  --florg-table-header-bg:          var(--baseline-color-shade, #eef2f6);
+  --florg-table-header-color:       #203040;
+  --florg-table-header-border:      #d7dde3;
+  --florg-table-row-border:         #eef1f4;
+  --florg-table-row-hover-bg:       #f7f9fb;
+  --florg-link-color:               var(--button-primary, #2f6fed);
+
+  --florg-btn-border:               #d0d5db;
+  --florg-btn-bg:                   #fff;
+  --florg-btn-color:                #2c3440;
+  --florg-btn-hover-bg:              #f2f5f8;
+  --florg-btn-primary-bg:            var(--button-primary, #2E6690);
+  --florg-btn-primary-border:        var(--button-primary, #2E6690);
+  --florg-btn-primary-color:         var(--button-fg, #fff);
+  --florg-btn-primary-hover-bg:      var(--button-primary-hover, #24526F);
+  --florg-btn-primary-hover-border:  var(--button-primary-hover, #24526F);
+  --florg-btn-danger-border:         var(--button-danger, #B3392C);
+  --florg-btn-danger-color:          var(--button-danger, #B3392C);
+  --florg-btn-danger-hover-bg:       var(--button-danger, #B3392C);
+  --florg-btn-danger-hover-color:    var(--button-fg, #fff);
+
+  --florg-label-color:               #2c3440;
+  /* .florgForm's inputs/textareas never set an explicit background/text color at all in the
+     original version of this file -- they simply rendered with the browser's native white
+     input chrome regardless of page theme. That's now an explicit (light-default) token pair
+     so a dark host app can actually retheme them, instead of being stuck with a native white
+     box no override could previously reach. */
+  --florg-input-bg:                  #fff;
+  --florg-input-color:               #1a1f2b;
+  --florg-input-border:              #d0d5db;
+  --florg-input-focus-border:        var(--button-primary, #2f6fed);
+  --florg-input-focus-shadow:        rgba(47, 111, 237, 0.15);
+
+  --florg-req-color:                 #d0362a;
+  --florg-error-color:               #d0362a;
+  --florg-banner-color:              #1c7c3f;
+  --florg-banner-bg:                 #eaf7ef;
+  --florg-banner-border:             #cdeed9;
+  --florg-banner-warning-color:      #8a6300;
+  --florg-banner-warning-bg:         #fff3cd;
+  --florg-banner-warning-border:     #f5e1a4;
+
+  --florg-hr-color:                  #eef1f4;
+  --florg-danger-title-color:        #d0362a;
+  --florg-danger-text-color:         #6b7580;
+  --florg-transfer-bg:               #f9fbfd;
+  --florg-transfer-border:           #d7dde3;
+
+  --florg-acl-role-sel-border:       #d0d5db;
+  --florg-acl-revoke-border:         var(--button-danger, #e2564a);
+  --florg-acl-revoke-color:          var(--button-danger, #d0362a);
+  --florg-acl-revoke-bg:             #fff;
+  --florg-acl-revoke-hover-bg:       var(--button-danger, #e2564a);
+  --florg-acl-revoke-hover-color:    var(--button-fg, #fff);
+
+  --florg-seats-ok-color:            #1c7c3f;
+  --florg-seats-full-color:          #d0362a;
+  --florg-seats-unlimited-color:     #6b7580;
+
+  --florg-invtable-card-border:      #e4e7eb;
+  --florg-invtable-toolbar-bg:       var(--baseline-color-shade, #eef2f6);
+  --florg-invtable-toolbar-border:   #d7dde3;
+  --florg-invtable-toolbar-color:    #203040;
+
+  --florg-invite-inline-bg:          #f9fbfd;
+  --florg-invite-inline-border:      #d7dde3;
+  --florg-invite-placeholder-title-color: #203040;
+  --florg-invite-placeholder-text-color:  #4a5560;
+}
 
 .florgWrap {
   padding: 0.5em 1em 1em 1em;
@@ -41,13 +131,13 @@
   margin: 0 0 0.5em 0;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #203040;
-  border-bottom: 1px solid #e4e7eb;
+  color: var(--florg-heading-color);
+  border-bottom: 1px solid var(--florg-heading-border);
   padding-bottom: 0.35em;
 }
 
 .florgEmpty {
-  color: #77828c;
+  color: var(--florg-muted-color);
   font-size: 0.9rem;
   font-style: italic;
   padding: 0.5em 0.25em 1em 0.25em;
@@ -62,23 +152,23 @@
 .florgTable th {
   text-align: left;
   padding: 0.5em 0.6em;
-  background-color: var(--baseline-color-shade, #eef2f6);
-  color: #203040;
+  background-color: var(--florg-table-header-bg);
+  color: var(--florg-table-header-color);
   font-weight: 600;
-  border-bottom: 2px solid #d7dde3;
+  border-bottom: 2px solid var(--florg-table-header-border);
   position: sticky;
   top: 0;
 }
 .florgTable td {
   padding: 0.5em 0.6em;
-  border-bottom: 1px solid #eef1f4;
+  border-bottom: 1px solid var(--florg-table-row-border);
   vertical-align: middle;
 }
 .florgTable tr:hover td {
-  background-color: #f7f9fb;
+  background-color: var(--florg-table-row-hover-bg);
 }
 .florgLink {
-  color: var(--button-primary, #2f6fed);
+  color: var(--florg-link-color);
   cursor: pointer;
   font-weight: 600;
 }
@@ -95,10 +185,10 @@
   display: inline-block;
   padding: 0.45em 1em;
   margin-left: 0.4em;
-  border: 1px solid #d0d5db;
+  border: 1px solid var(--florg-btn-border);
   border-radius: 6px;
-  background-color: #fff;
-  color: #2c3440;
+  background-color: var(--florg-btn-bg);
+  color: var(--florg-btn-color);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -108,37 +198,37 @@
   margin-left: 0;
 }
 .florgBtn:hover {
-  background-color: #f2f5f8;
+  background-color: var(--florg-btn-hover-bg);
 }
 .florgBtn:disabled {
   opacity: 0.6;
   cursor: default;
 }
 .florgBtnPrimary {
-  background-color: var(--button-primary, #2E6690);
-  border-color: var(--button-primary, #2E6690);
-  color: var(--button-fg, #fff);
+  background-color: var(--florg-btn-primary-bg);
+  border-color: var(--florg-btn-primary-border);
+  color: var(--florg-btn-primary-color);
 }
 .florgBtnPrimary:hover {
-  background-color: var(--button-primary-hover, #24526F);
-  border-color: var(--button-primary-hover, #24526F);
+  background-color: var(--florg-btn-primary-hover-bg);
+  border-color: var(--florg-btn-primary-hover-border);
 }
 .florgBtnDanger {
-  background-color: #fff;
-  border-color: var(--button-danger, #B3392C);
-  color: var(--button-danger, #B3392C);
+  background-color: var(--florg-btn-bg);
+  border-color: var(--florg-btn-danger-border);
+  color: var(--florg-btn-danger-color);
 }
 .florgBtnDanger:hover {
-  background-color: var(--button-danger, #B3392C);
-  border-color: var(--button-danger, #B3392C);
-  color: var(--button-fg, #fff);
+  background-color: var(--florg-btn-danger-hover-bg);
+  border-color: var(--florg-btn-danger-hover-bg);
+  color: var(--florg-btn-danger-hover-color);
 }
 .florgBtnSmall {
   padding: 0.3em 0.7em;
   font-size: 0.78rem;
 }
 
-/* ── Forms (create/edit organization) ──────────────────────────────────── */
+/* ── Forms (create/edit organization/project) ──────────────────────────── */
 .florgForm {
   max-width: 560px;
   margin: 0.5em auto 0 auto;
@@ -151,7 +241,7 @@
   display: block;
   font-weight: 600;
   font-size: 0.85rem;
-  color: #2c3440;
+  color: var(--florg-label-color);
   margin-bottom: 0.3em;
 }
 .florgForm input[type="text"],
@@ -160,8 +250,10 @@
   width: 100%;
   box-sizing: border-box;
   padding: 0.5em 0.6em;
-  border: 1px solid #d0d5db;
+  border: 1px solid var(--florg-input-border);
   border-radius: 6px;
+  background-color: var(--florg-input-bg);
+  color: var(--florg-input-color);
   font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;
@@ -170,30 +262,30 @@
 .florgForm input[type="email"]:focus,
 .florgForm textarea:focus {
   outline: none;
-  border-color: var(--button-primary, #2f6fed);
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.15);
+  border-color: var(--florg-input-focus-border);
+  box-shadow: 0 0 0 2px var(--florg-input-focus-shadow);
 }
 .florgReq {
-  color: #d0362a;
+  color: var(--florg-req-color);
 }
 .florgError {
-  color: #d0362a;
+  color: var(--florg-error-color);
   font-size: 0.82rem;
   margin: -0.4em 0 0.8em 0;
 }
 .florgBanner {
-  color: #1c7c3f;
-  background-color: #eaf7ef;
-  border: 1px solid #cdeed9;
+  color: var(--florg-banner-color);
+  background-color: var(--florg-banner-bg);
+  border: 1px solid var(--florg-banner-border);
   border-radius: 6px;
   padding: 0.5em 0.75em;
   font-size: 0.85rem;
   margin-top: 0.5em;
 }
 .florgBannerWarning {
-  color: #8a6300;
-  background-color: #fff3cd;
-  border-color: #f5e1a4;
+  color: var(--florg-banner-warning-color);
+  background-color: var(--florg-banner-warning-bg);
+  border-color: var(--florg-banner-warning-border);
   margin-bottom: 1em;
 }
 .florgActions {
@@ -205,25 +297,25 @@
 /* ── Danger zone (delete / restore) ────────────────────────────────────── */
 .florgHr {
   border: none;
-  border-top: 1px solid #eef1f4;
+  border-top: 1px solid var(--florg-hr-color);
   margin: 1.25em 0;
 }
 .florgDangerZone h4 {
   margin: 0 0 0.4em 0;
-  color: #d0362a;
+  color: var(--florg-danger-title-color);
   font-size: 0.95rem;
 }
 .florgDangerZone p {
   font-size: 0.82rem;
-  color: #6b7580;
+  color: var(--florg-danger-text-color);
   margin: 0 0 0.6em 0;
 }
 .florgTransferForm {
   margin-top: 1em;
   padding: 0.9em 1em 0.2em 1em;
-  border: 1px solid #d7dde3;
+  border: 1px solid var(--florg-transfer-border);
   border-radius: 8px;
-  background-color: #f9fbfd;
+  background-color: var(--florg-transfer-bg);
 }
 
 /* ── Access Control tab ─────────────────────────────────────────────────── */
@@ -236,22 +328,50 @@
 }
 .florgAclRoleSel {
   padding: 0.25em 0.4em;
-  border: 1px solid #d0d5db;
+  border: 1px solid var(--florg-acl-role-sel-border);
   border-radius: 5px;
   font-size: 0.85rem;
+  background-color: var(--florg-input-bg);
+  color: var(--florg-input-color);
 }
 .florgAclRevokeBtn {
-  border: 1px solid var(--button-danger, #e2564a);
-  color: var(--button-danger, #d0362a);
-  background-color: #fff;
+  border: 1px solid var(--florg-acl-revoke-border);
+  color: var(--florg-acl-revoke-color);
+  background-color: var(--florg-acl-revoke-bg);
   border-radius: 5px;
   padding: 0.25em 0.6em;
   font-size: 0.78rem;
   cursor: pointer;
 }
 .florgAclRevokeBtn:hover {
-  background-color: var(--button-danger, #e2564a);
-  color: var(--button-fg, #fff);
+  background-color: var(--florg-acl-revoke-hover-bg);
+  color: var(--florg-acl-revoke-hover-color);
+}
+
+/* ── "Grant Access" user-picker (FloriaOrgs.PopupProjects._openUserPicker, module-organizations.js) ──
+   The picker itself is a FloriaTable (styled via module-tables.css's own --ftbl-* contract); these
+   rules only cover the inline role-select + Confirm expansion appended into the clicked row's name
+   cell. */
+.florgUserPickerWrap {
+  padding: 0 0.25em;
+}
+.florgPickExpand {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.4em;
+}
+.florgPickRoleSel {
+  padding: 0.25em 0.4em;
+  border: 1px solid var(--florg-acl-role-sel-border);
+  border-radius: 5px;
+  font-size: 0.85rem;
+  background-color: var(--florg-input-bg);
+  color: var(--florg-input-color);
+}
+.florgPickExpErr {
+  color: var(--florg-error-color);
+  font-size: 0.8rem;
 }
 
 /* ── Manage Invitations tab ──────────────────────────────────────────────── */
@@ -260,14 +380,14 @@
   margin-bottom: 0.6em;
 }
 .florgSeatsOk {
-  color: #1c7c3f;
+  color: var(--florg-seats-ok-color);
 }
 .florgSeatsFull {
-  color: #d0362a;
+  color: var(--florg-seats-full-color);
   font-weight: 600;
 }
 .florgSeatsUnlimited {
-  color: #6b7580;
+  color: var(--florg-seats-unlimited-color);
   font-style: italic;
 }
 .florgInvToolbar {
@@ -282,7 +402,7 @@
    filter is clearly attached to the table it controls (rather than floating above the inline
    invite form, which now renders separately, above this card). */
 .florgInvTableCard {
-  border: 1px solid #e4e7eb;
+  border: 1px solid var(--florg-invtable-card-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -291,11 +411,11 @@
   align-items: center;
   gap: 0.5em;
   padding: 0.6em 0.75em;
-  background-color: var(--baseline-color-shade, #eef2f6);
-  border-bottom: 1px solid #d7dde3;
+  background-color: var(--florg-invtable-toolbar-bg);
+  border-bottom: 1px solid var(--florg-invtable-toolbar-border);
   font-size: 0.85rem;
   font-weight: 600;
-  color: #203040;
+  color: var(--florg-invtable-toolbar-color);
 }
 .florgInvTableCard .florgAclTableHost {
   margin-top: 0;
@@ -318,9 +438,9 @@
 .florgInviteInline {
   padding: 0.9em 1em 0.2em 1em;
   margin-bottom: 1em;
-  border: 1px solid #d7dde3;
+  border: 1px solid var(--florg-invite-inline-border);
   border-radius: 8px;
-  background-color: #f9fbfd;
+  background-color: var(--florg-invite-inline-bg);
 }
 .florgInviteRow {
   display: flex;
@@ -338,11 +458,11 @@
 }
 .florgInvitePlaceholder h3 {
   margin-top: 0;
-  color: #203040;
+  color: var(--florg-invite-placeholder-title-color);
 }
 .florgInvitePlaceholder p {
   font-size: 0.88rem;
-  color: #4a5560;
+  color: var(--florg-invite-placeholder-text-color);
 }
 
 /* ── Credit balance gauge (FloriaPayments.CreditGauge, module-payments.js) ─────────────────

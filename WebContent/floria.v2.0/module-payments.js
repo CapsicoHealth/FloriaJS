@@ -198,8 +198,13 @@ FloriaPayments.PlansDialog = {
       // dlgHandle for its own, tab-less content clears it too, so isVisible()==true is never mistaken for
       // "the Usage tab is one call away" when it's actually showing something else entirely.
       FloriaPayments.PlansDialog._activeFocusUsage = null;
+      // { skin: false }: Plans/Billing is reached from the same global header account menu as
+      // "Your Account"/"Your EULA"/"Help" and must keep that same neutral/classic chrome across
+      // every app, regardless of whatever per-app FloriaDialog skin (e.g. Flow Studio's "emerald")
+      // is set on the current page -- see module-organizations.js's matching note on
+      // FloriaOrgs.PopupOrganizations for the full rationale.
       if (FloriaPayments.PlansDialog.dlgHandle == null)
-       FloriaPayments.PlansDialog.dlgHandle = new FloriaDialog("DLG_POPUP_PAYMENTS");
+       FloriaPayments.PlansDialog.dlgHandle = new FloriaDialog("DLG_POPUP_PAYMENTS", { skin: false });
       FloriaPayments.PlansDialog.dlgHandle.show("Plans / Billing", null, 0.75, 0.9, function(cntId) {
          document.getElementById(cntId).innerHTML = '<BR><BR><BR><CENTER><IMG src="/static/img/progress.gif" height="60px"></CENTER>';
 
@@ -326,7 +331,7 @@ FloriaPayments.PlansDialog = {
       // just switch tabs on.
       FloriaPayments.PlansDialog._activeFocusUsage = null;
       if (FloriaPayments.PlansDialog.dlgHandle == null)
-       FloriaPayments.PlansDialog.dlgHandle = new FloriaDialog("DLG_POPUP_PAYMENTS");
+       FloriaPayments.PlansDialog.dlgHandle = new FloriaDialog("DLG_POPUP_PAYMENTS", { skin: false }); // see the Plans/Billing skin note above
       FloriaPayments.PlansDialog.dlgHandle.show("Top Up Your Credits", null, 0.75, 0.9, function(cntId) {
          document.getElementById(cntId).innerHTML = '<BR><BR><BR><CENTER><IMG src="/static/img/progress.gif" height="60px"></CENTER>';
          // productId filters the catalog down to just this product's packs: the user is topping up, not
@@ -1358,7 +1363,7 @@ FloriaPayments.PlansDialog.UsageDashboard = {
 
 
 
-
+
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Credit balance gauge (embeddable "credit meter" widget)
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
