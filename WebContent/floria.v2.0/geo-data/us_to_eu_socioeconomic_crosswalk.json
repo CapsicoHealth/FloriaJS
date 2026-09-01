@@ -1,0 +1,1054 @@
+{
+  "metadata": {
+    "purpose": "Synthetic geographic crosswalk for visualizing US county-level sales data on EU maps.",
+    "method": "Socio-economic analogy, not a statistical equivalence. US states are mapped to EU countries with broadly comparable economic scale, urbanization, industrial/service mix, population density, and regional diversity. US counties are mapped to NUTS 3 regions with broadly comparable metropolitan, suburban, industrial, coastal, or rural profiles.",
+    "eu_region_level": "NUTS 2",
+    "nuts_version": "2024",
+    "source_note": "NUTS is Eurostat's official regional statistical classification. NUTS 3 is the small-region level used for specific diagnoses; it is the closest practical EU analogue to US counties for this visualization use case.",
+    "state_selection": "10 large US states selected for population/economic significance; the county lists are the 10 most prominent counties by population/economic activity rather than a claim about the user's sales ranking.",
+    "synthetic": true,
+    "region_note": "NUTS 2 is used here because it is the EU's principal regional-policy/basic-region level and provides a stable, practical mapping target for county-level visualization. Multiple US counties may intentionally map to the same NUTS 2 region."
+  },
+  "state_mappings": [
+    {
+      "us_state": {
+        "code": "CA",
+        "name": "California"
+      },
+      "eu_country": {
+        "code": "DE",
+        "name": "Germany"
+      },
+      "state_mapping_rationale": "large, diversified, high-income economy; technology, finance, manufacturing and major coastal metros",
+      "county_mapping_strategy": "NUTS 3 regions across major German metropolitan and industrial corridors",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Los Angeles County",
+          "eu_region": {
+            "nuts2_code": "DE11",
+            "name": "Stuttgart"
+          },
+          "mapping_rationale": "largest metro/consumer market"
+        },
+        {
+          "rank": 2,
+          "us_county": "San Diego County",
+          "eu_region": {
+            "nuts2_code": "DE21",
+            "name": "Oberbayern"
+          },
+          "mapping_rationale": "large affluent metro; defense/technology"
+        },
+        {
+          "rank": 3,
+          "us_county": "Orange County",
+          "eu_region": {
+            "nuts2_code": "DE11",
+            "name": "Stuttgart"
+          },
+          "mapping_rationale": "affluent technology/manufacturing/services corridor"
+        },
+        {
+          "rank": 4,
+          "us_county": "Riverside County",
+          "eu_region": {
+            "nuts2_code": "DE30",
+            "name": "Berlin"
+          },
+          "mapping_rationale": "large suburban/exurban growth market"
+        },
+        {
+          "rank": 5,
+          "us_county": "San Bernardino County",
+          "eu_region": {
+            "nuts2_code": "DE21",
+            "name": "Oberbayern"
+          },
+          "mapping_rationale": "large logistics/industrial territory"
+        },
+        {
+          "rank": 6,
+          "us_county": "Santa Clara County",
+          "eu_region": {
+            "nuts2_code": "DE11",
+            "name": "Stuttgart"
+          },
+          "mapping_rationale": "high-income technology cluster"
+        },
+        {
+          "rank": 7,
+          "us_county": "Alameda County",
+          "eu_region": {
+            "nuts2_code": "DE12",
+            "name": "Karlsruhe"
+          },
+          "mapping_rationale": "dense innovation/education/industry metro"
+        },
+        {
+          "rank": 8,
+          "us_county": "Sacramento County",
+          "eu_region": {
+            "nuts2_code": "DE30",
+            "name": "Berlin"
+          },
+          "mapping_rationale": "state-capital/government and diversified services center"
+        },
+        {
+          "rank": 9,
+          "us_county": "Contra Costa County",
+          "eu_region": {
+            "nuts2_code": "DE12",
+            "name": "Karlsruhe"
+          },
+          "mapping_rationale": "affluent suburban/industrial corridor"
+        },
+        {
+          "rank": 10,
+          "us_county": "Fresno County",
+          "eu_region": {
+            "nuts2_code": "DE73",
+            "name": "Kassel"
+          },
+          "mapping_rationale": "large agricultural/service regional center"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "TX",
+        "name": "Texas"
+      },
+      "eu_country": {
+        "code": "FR",
+        "name": "France"
+      },
+      "state_mapping_rationale": "large diversified economy with energy, aerospace, manufacturing, technology and major metros",
+      "county_mapping_strategy": "NUTS 3 regions across Paris-region, Lyon, Toulouse, Marseille and other major French economic centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Harris County",
+          "eu_region": {
+            "nuts2_code": "FR10",
+            "name": "Île-de-France"
+          },
+          "mapping_rationale": "dominant global metro; energy/business services"
+        },
+        {
+          "rank": 2,
+          "us_county": "Dallas County",
+          "eu_region": {
+            "nuts2_code": "FR10",
+            "name": "Île-de-France"
+          },
+          "mapping_rationale": "large corporate/service metro"
+        },
+        {
+          "rank": 3,
+          "us_county": "Tarrant County",
+          "eu_region": {
+            "nuts2_code": "FRJ2",
+            "name": "Midi-Pyrénées"
+          },
+          "mapping_rationale": "aerospace/industrial/fast-growing metro profile"
+        },
+        {
+          "rank": 4,
+          "us_county": "Bexar County",
+          "eu_region": {
+            "nuts2_code": "FRL0",
+            "name": "Provence-Alpes-Côte d'Azur"
+          },
+          "mapping_rationale": "large diversified southern metro"
+        },
+        {
+          "rank": 5,
+          "us_county": "Travis County",
+          "eu_region": {
+            "nuts2_code": "FRI1",
+            "name": "Aquitaine"
+          },
+          "mapping_rationale": "technology/knowledge-intensive capital metro"
+        },
+        {
+          "rank": 6,
+          "us_county": "Collin County",
+          "eu_region": {
+            "nuts2_code": "FR10",
+            "name": "Île-de-France"
+          },
+          "mapping_rationale": "affluent high-growth suburban business corridor"
+        },
+        {
+          "rank": 7,
+          "us_county": "Hidalgo County",
+          "eu_region": {
+            "nuts2_code": "FRJ1",
+            "name": "Languedoc-Roussillon"
+          },
+          "mapping_rationale": "border/coastal agricultural-service profile"
+        },
+        {
+          "rank": 8,
+          "us_county": "Denton County",
+          "eu_region": {
+            "nuts2_code": "FRJ1",
+            "name": "Languedoc-Roussillon"
+          },
+          "mapping_rationale": "fast-growing university/technology-oriented metro region"
+        },
+        {
+          "rank": 9,
+          "us_county": "El Paso County",
+          "eu_region": {
+            "nuts2_code": "FRJ2",
+            "name": "Midi-Pyrénées"
+          },
+          "mapping_rationale": "large peripheral metro with aerospace/defense and logistics"
+        },
+        {
+          "rank": 10,
+          "us_county": "Fort Bend County",
+          "eu_region": {
+            "nuts2_code": "FRI1",
+            "name": "Aquitaine"
+          },
+          "mapping_rationale": "affluent high-growth suburban corridor"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "NY",
+        "name": "New York"
+      },
+      "eu_country": {
+        "code": "NL",
+        "name": "Netherlands"
+      },
+      "state_mapping_rationale": "high-income, dense, internationally connected service economy with a dominant global city and strong secondary metros",
+      "county_mapping_strategy": "NUTS 3 regions across Randstad and major Dutch urban/economic centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Kings County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "dense, affluent metropolitan/suburban analogue"
+        },
+        {
+          "rank": 2,
+          "us_county": "Queens County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "major international metro, airport/services"
+        },
+        {
+          "rank": 3,
+          "us_county": "New York County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "global finance/media/services core"
+        },
+        {
+          "rank": 4,
+          "us_county": "Suffolk County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "affluent outer-metro/coastal market"
+        },
+        {
+          "rank": 5,
+          "us_county": "Bronx County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "dense urban metro market"
+        },
+        {
+          "rank": 6,
+          "us_county": "Nassau County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "affluent suburban/coastal corridor"
+        },
+        {
+          "rank": 7,
+          "us_county": "Westchester County",
+          "eu_region": {
+            "nuts2_code": "NL33",
+            "name": "Zuid-Holland"
+          },
+          "mapping_rationale": "affluent high-value suburban/knowledge economy"
+        },
+        {
+          "rank": 8,
+          "us_county": "Erie County",
+          "eu_region": {
+            "nuts2_code": "NL42",
+            "name": "Limburg"
+          },
+          "mapping_rationale": "large secondary metro with services/education"
+        },
+        {
+          "rank": 9,
+          "us_county": "Monroe County",
+          "eu_region": {
+            "nuts2_code": "NL21",
+            "name": "Overijssel"
+          },
+          "mapping_rationale": "secondary regional center with knowledge/manufacturing base"
+        },
+        {
+          "rank": 10,
+          "us_county": "Richmond County",
+          "eu_region": {
+            "nuts2_code": "NL32",
+            "name": "Noord-Holland"
+          },
+          "mapping_rationale": "dense urban/coastal metro"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "FL",
+        "name": "Florida"
+      },
+      "eu_country": {
+        "code": "ES",
+        "name": "Spain"
+      },
+      "state_mapping_rationale": "large population, tourism, real estate, healthcare and services economy with strong coastal metros",
+      "county_mapping_strategy": "NUTS 3 regions across Madrid, Barcelona, Valencia, Málaga, Sevilla and other major Spanish centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Miami-Dade County",
+          "eu_region": {
+            "nuts2_code": "ES30",
+            "name": "Comunidad de Madrid"
+          },
+          "mapping_rationale": "international gateway, finance, tourism and services"
+        },
+        {
+          "rank": 2,
+          "us_county": "Broward County",
+          "eu_region": {
+            "nuts2_code": "ES52",
+            "name": "Comunitat Valenciana"
+          },
+          "mapping_rationale": "large coastal tourism/services metro"
+        },
+        {
+          "rank": 3,
+          "us_county": "Hillsborough County",
+          "eu_region": {
+            "nuts2_code": "ES51",
+            "name": "Cataluña"
+          },
+          "mapping_rationale": "large diversified coastal metro"
+        },
+        {
+          "rank": 4,
+          "us_county": "Orange County",
+          "eu_region": {
+            "nuts2_code": "ES30",
+            "name": "Comunidad de Madrid"
+          },
+          "mapping_rationale": "large tourism/entertainment and services center"
+        },
+        {
+          "rank": 5,
+          "us_county": "Palm Beach County",
+          "eu_region": {
+            "nuts2_code": "ES53",
+            "name": "Illes Balears"
+          },
+          "mapping_rationale": "affluent coastal/tourism-oriented economy"
+        },
+        {
+          "rank": 6,
+          "us_county": "Pinellas County",
+          "eu_region": {
+            "nuts2_code": "ES52",
+            "name": "Comunitat Valenciana"
+          },
+          "mapping_rationale": "dense coastal services/retirement/tourism market"
+        },
+        {
+          "rank": 7,
+          "us_county": "Duval County",
+          "eu_region": {
+            "nuts2_code": "ES61",
+            "name": "Andalucía"
+          },
+          "mapping_rationale": "large inland/coastal regional center and logistics hub"
+        },
+        {
+          "rank": 8,
+          "us_county": "Lee County",
+          "eu_region": {
+            "nuts2_code": "ES52",
+            "name": "Comunitat Valenciana"
+          },
+          "mapping_rationale": "coastal tourism/retirement growth market"
+        },
+        {
+          "rank": 9,
+          "us_county": "Polk County",
+          "eu_region": {
+            "nuts2_code": "ES52",
+            "name": "Comunitat Valenciana"
+          },
+          "mapping_rationale": "inland logistics/agriculture/growth corridor"
+        },
+        {
+          "rank": 10,
+          "us_county": "Brevard County",
+          "eu_region": {
+            "nuts2_code": "ES52",
+            "name": "Comunitat Valenciana"
+          },
+          "mapping_rationale": "coastal aerospace/technology/tourism mix"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "IL",
+        "name": "Illinois"
+      },
+      "eu_country": {
+        "code": "IT",
+        "name": "Italy"
+      },
+      "state_mapping_rationale": "large diversified economy with a dominant commercial/industrial metro and substantial manufacturing/services base",
+      "county_mapping_strategy": "NUTS 3 regions across Milan, Rome, Turin, Bologna, Naples and other major Italian centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Cook County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "dominant commercial/industrial metro"
+        },
+        {
+          "rank": 2,
+          "us_county": "DuPage County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "affluent suburban corporate corridor"
+        },
+        {
+          "rank": 3,
+          "us_county": "Lake County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "affluent suburban/industrial corridor"
+        },
+        {
+          "rank": 4,
+          "us_county": "Will County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "logistics/manufacturing growth corridor"
+        },
+        {
+          "rank": 5,
+          "us_county": "Kane County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "suburban manufacturing/services corridor"
+        },
+        {
+          "rank": 6,
+          "us_county": "McHenry County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "outer suburban/manufacturing profile"
+        },
+        {
+          "rank": 7,
+          "us_county": "Winnebago County",
+          "eu_region": {
+            "nuts2_code": "ITI1",
+            "name": "Toscana"
+          },
+          "mapping_rationale": "industrial/manufacturing regional center"
+        },
+        {
+          "rank": 8,
+          "us_county": "Madison County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "industrial/logistics corridor"
+        },
+        {
+          "rank": 9,
+          "us_county": "St. Clair County",
+          "eu_region": {
+            "nuts2_code": "ITC4",
+            "name": "Lombardia"
+          },
+          "mapping_rationale": "metro-adjacent industrial/logistics profile"
+        },
+        {
+          "rank": 10,
+          "us_county": "Champaign County",
+          "eu_region": {
+            "nuts2_code": "ITH5",
+            "name": "Emilia-Romagna"
+          },
+          "mapping_rationale": "university/research and advanced-services center"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "PA",
+        "name": "Pennsylvania"
+      },
+      "eu_country": {
+        "code": "PL",
+        "name": "Poland"
+      },
+      "state_mapping_rationale": "large diversified economy with major legacy industrial centers, services, logistics and growing technology sectors",
+      "county_mapping_strategy": "NUTS 3 regions across Warsaw, Kraków, Wrocław, Poznań, Łódź and major Polish industrial centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Philadelphia County",
+          "eu_region": {
+            "nuts2_code": "PL91",
+            "name": "Makroregion Województwo Mazowieckie"
+          },
+          "mapping_rationale": "dominant dense metropolitan core"
+        },
+        {
+          "rank": 2,
+          "us_county": "Allegheny County",
+          "eu_region": {
+            "nuts2_code": "PL21",
+            "name": "Małopolskie"
+          },
+          "mapping_rationale": "large secondary metro with services, education and technology"
+        },
+        {
+          "rank": 3,
+          "us_county": "Montgomery County",
+          "eu_region": {
+            "nuts2_code": "PL91",
+            "name": "Makroregion Województwo Mazowieckie"
+          },
+          "mapping_rationale": "affluent metropolitan suburban corridor"
+        },
+        {
+          "rank": 4,
+          "us_county": "Bucks County",
+          "eu_region": {
+            "nuts2_code": "PL91",
+            "name": "Makroregion Województwo Mazowieckie"
+          },
+          "mapping_rationale": "affluent suburban/exurban corridor"
+        },
+        {
+          "rank": 5,
+          "us_county": "Delaware County",
+          "eu_region": {
+            "nuts2_code": "PL91",
+            "name": "Makroregion Województwo Mazowieckie"
+          },
+          "mapping_rationale": "dense metro suburban corridor"
+        },
+        {
+          "rank": 6,
+          "us_county": "Lancaster County",
+          "eu_region": {
+            "nuts2_code": "PL41",
+            "name": "Wielkopolskie"
+          },
+          "mapping_rationale": "manufacturing/agriculture/services regional mix"
+        },
+        {
+          "rank": 7,
+          "us_county": "Chester County",
+          "eu_region": {
+            "nuts2_code": "PL91",
+            "name": "Makroregion Województwo Mazowieckie"
+          },
+          "mapping_rationale": "affluent high-growth knowledge/services corridor"
+        },
+        {
+          "rank": 8,
+          "us_county": "York County",
+          "eu_region": {
+            "nuts2_code": "PL41",
+            "name": "Wielkopolskie"
+          },
+          "mapping_rationale": "industrial/logistics regional center"
+        },
+        {
+          "rank": 9,
+          "us_county": "Lehigh County",
+          "eu_region": {
+            "nuts2_code": "PL42",
+            "name": "Dolnośląskie"
+          },
+          "mapping_rationale": "manufacturing/logistics/urban regional mix"
+        },
+        {
+          "rank": 10,
+          "us_county": "Berks County",
+          "eu_region": {
+            "nuts2_code": "PL41",
+            "name": "Wielkopolskie"
+          },
+          "mapping_rationale": "manufacturing/logistics/food production mix"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "OH",
+        "name": "Ohio"
+      },
+      "eu_country": {
+        "code": "CZ",
+        "name": "Czechia"
+      },
+      "state_mapping_rationale": "manufacturing-heavy, industrial, logistics and service economy with several sizable metropolitan areas",
+      "county_mapping_strategy": "NUTS 3 regions across Prague and major Czech industrial/urban centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Franklin County",
+          "eu_region": {
+            "nuts2_code": "CZ01",
+            "name": "Praha"
+          },
+          "mapping_rationale": "major capital/knowledge-services metro"
+        },
+        {
+          "rank": 2,
+          "us_county": "Cuyahoga County",
+          "eu_region": {
+            "nuts2_code": "CZ08",
+            "name": "Moravskoslezsko"
+          },
+          "mapping_rationale": "large industrial/education/services metro"
+        },
+        {
+          "rank": 3,
+          "us_county": "Hamilton County",
+          "eu_region": {
+            "nuts2_code": "CZ07",
+            "name": "Střední Morava"
+          },
+          "mapping_rationale": "large regional urban center"
+        },
+        {
+          "rank": 4,
+          "us_county": "Summit County",
+          "eu_region": {
+            "nuts2_code": "CZ04",
+            "name": "Severozápad"
+          },
+          "mapping_rationale": "industrial/manufacturing regional center"
+        },
+        {
+          "rank": 5,
+          "us_county": "Montgomery County",
+          "eu_region": {
+            "nuts2_code": "CZ05",
+            "name": "Severovýchod"
+          },
+          "mapping_rationale": "manufacturing/logistics/services center"
+        },
+        {
+          "rank": 6,
+          "us_county": "Lucas County",
+          "eu_region": {
+            "nuts2_code": "CZ08",
+            "name": "Moravskoslezsko"
+          },
+          "mapping_rationale": "industrial/logistics metro"
+        },
+        {
+          "rank": 7,
+          "us_county": "Butler County",
+          "eu_region": {
+            "nuts2_code": "CZ02",
+            "name": "Střední Čechy"
+          },
+          "mapping_rationale": "manufacturing/growth corridor"
+        },
+        {
+          "rank": 8,
+          "us_county": "Stark County",
+          "eu_region": {
+            "nuts2_code": "CZ08",
+            "name": "Moravskoslezsko"
+          },
+          "mapping_rationale": "industrial regional market"
+        },
+        {
+          "rank": 9,
+          "us_county": "Lorain County",
+          "eu_region": {
+            "nuts2_code": "CZ08",
+            "name": "Moravskoslezsko"
+          },
+          "mapping_rationale": "industrial/coastal-lake manufacturing analogue"
+        },
+        {
+          "rank": 10,
+          "us_county": "Warren County",
+          "eu_region": {
+            "nuts2_code": "CZ01",
+            "name": "Praha"
+          },
+          "mapping_rationale": "affluent metropolitan growth corridor"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "GA",
+        "name": "Georgia"
+      },
+      "eu_country": {
+        "code": "PT",
+        "name": "Portugal"
+      },
+      "state_mapping_rationale": "mid-large, service/manufacturing/logistics economy with a dominant capital metro and important coastal/industrial centers",
+      "county_mapping_strategy": "NUTS 3 regions across Lisbon, Porto, Braga, Aveiro, Setúbal and other Portuguese centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Fulton County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "dominant capital/business-services metro"
+        },
+        {
+          "rank": 2,
+          "us_county": "Gwinnett County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "affluent high-growth suburban business corridor"
+        },
+        {
+          "rank": 3,
+          "us_county": "Cobb County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "affluent suburban/corporate corridor"
+        },
+        {
+          "rank": 4,
+          "us_county": "DeKalb County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "dense metro/knowledge-services corridor"
+        },
+        {
+          "rank": 5,
+          "us_county": "Clayton County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "dense metropolitan/logistics corridor"
+        },
+        {
+          "rank": 6,
+          "us_county": "Chatham County",
+          "eu_region": {
+            "nuts2_code": "PT18",
+            "name": "Alentejo"
+          },
+          "mapping_rationale": "coastal tourism/logistics regional center"
+        },
+        {
+          "rank": 7,
+          "us_county": "Cherokee County",
+          "eu_region": {
+            "nuts2_code": "PT11",
+            "name": "Norte"
+          },
+          "mapping_rationale": "growing suburban/industrial corridor"
+        },
+        {
+          "rank": 8,
+          "us_county": "Henry County",
+          "eu_region": {
+            "nuts2_code": "PT17",
+            "name": "Área Metropolitana de Lisboa"
+          },
+          "mapping_rationale": "fast-growing outer metro corridor"
+        },
+        {
+          "rank": 9,
+          "us_county": "Richmond County",
+          "eu_region": {
+            "nuts2_code": "PT11",
+            "name": "Norte"
+          },
+          "mapping_rationale": "secondary urban/services center"
+        },
+        {
+          "rank": 10,
+          "us_county": "Muscogee County",
+          "eu_region": {
+            "nuts2_code": "PT11",
+            "name": "Norte"
+          },
+          "mapping_rationale": "manufacturing/services regional center"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "NC",
+        "name": "North Carolina"
+      },
+      "eu_country": {
+        "code": "SE",
+        "name": "Sweden"
+      },
+      "state_mapping_rationale": "high-income, diversified economy spanning technology, finance, life sciences, manufacturing and logistics",
+      "county_mapping_strategy": "NUTS 3 regions across Stockholm, Göteborg, Malmö and other Swedish growth centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Wake County",
+          "eu_region": {
+            "nuts2_code": "SE11",
+            "name": "Stockholm"
+          },
+          "mapping_rationale": "capital/technology/knowledge economy"
+        },
+        {
+          "rank": 2,
+          "us_county": "Mecklenburg County",
+          "eu_region": {
+            "nuts2_code": "SE11",
+            "name": "Stockholm"
+          },
+          "mapping_rationale": "major financial/business-services metro"
+        },
+        {
+          "rank": 3,
+          "us_county": "Guilford County",
+          "eu_region": {
+            "nuts2_code": "SE23",
+            "name": "Västsverige"
+          },
+          "mapping_rationale": "manufacturing/logistics/services regional center"
+        },
+        {
+          "rank": 4,
+          "us_county": "Forsyth County",
+          "eu_region": {
+            "nuts2_code": "SE21",
+            "name": "Småland med öarna"
+          },
+          "mapping_rationale": "manufacturing/knowledge-services center"
+        },
+        {
+          "rank": 5,
+          "us_county": "Cumberland County",
+          "eu_region": {
+            "nuts2_code": "SE22",
+            "name": "Sydsverige"
+          },
+          "mapping_rationale": "large regional services/defense/logistics center"
+        },
+        {
+          "rank": 6,
+          "us_county": "Durham County",
+          "eu_region": {
+            "nuts2_code": "SE11",
+            "name": "Stockholm"
+          },
+          "mapping_rationale": "research/technology/healthcare cluster"
+        },
+        {
+          "rank": 7,
+          "us_county": "Buncombe County",
+          "eu_region": {
+            "nuts2_code": "SE23",
+            "name": "Västsverige"
+          },
+          "mapping_rationale": "tourism/services regional center"
+        },
+        {
+          "rank": 8,
+          "us_county": "Union County",
+          "eu_region": {
+            "nuts2_code": "SE11",
+            "name": "Stockholm"
+          },
+          "mapping_rationale": "affluent suburban growth corridor"
+        },
+        {
+          "rank": 9,
+          "us_county": "Gaston County",
+          "eu_region": {
+            "nuts2_code": "SE23",
+            "name": "Västsverige"
+          },
+          "mapping_rationale": "manufacturing/industrial suburban corridor"
+        },
+        {
+          "rank": 10,
+          "us_county": "New Hanover County",
+          "eu_region": {
+            "nuts2_code": "SE22",
+            "name": "Sydsverige"
+          },
+          "mapping_rationale": "coastal services/tourism regional center"
+        }
+      ]
+    },
+    {
+      "us_state": {
+        "code": "NJ",
+        "name": "New Jersey"
+      },
+      "eu_country": {
+        "code": "BE",
+        "name": "Belgium"
+      },
+      "state_mapping_rationale": "dense, affluent, highly urbanized economy integrated with a major international metro and strong logistics/pharma/services sectors",
+      "county_mapping_strategy": "NUTS 3 regions across Brussels, Antwerp, Ghent, Leuven and other Belgian economic centers",
+      "counties": [
+        {
+          "rank": 1,
+          "us_county": "Bergen County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "affluent dense metropolitan/suburban corridor"
+        },
+        {
+          "rank": 2,
+          "us_county": "Middlesex County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "dense pharma/technology/business corridor"
+        },
+        {
+          "rank": 3,
+          "us_county": "Essex County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "dense urban/metropolitan market"
+        },
+        {
+          "rank": 4,
+          "us_county": "Hudson County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "ultra-dense global metro corridor"
+        },
+        {
+          "rank": 5,
+          "us_county": "Monmouth County",
+          "eu_region": {
+            "nuts2_code": "BE21",
+            "name": "Prov. Antwerpen"
+          },
+          "mapping_rationale": "affluent coastal/suburban market"
+        },
+        {
+          "rank": 6,
+          "us_county": "Ocean County",
+          "eu_region": {
+            "nuts2_code": "BE25",
+            "name": "Prov. West-Vlaanderen"
+          },
+          "mapping_rationale": "coastal tourism/residential market"
+        },
+        {
+          "rank": 7,
+          "us_county": "Union County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "dense suburban/corporate corridor"
+        },
+        {
+          "rank": 8,
+          "us_county": "Camden County",
+          "eu_region": {
+            "nuts2_code": "BE31",
+            "name": "Prov. Brabant Wallon"
+          },
+          "mapping_rationale": "metro-adjacent services/logistics corridor"
+        },
+        {
+          "rank": 9,
+          "us_county": "Passaic County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "dense industrial/urban corridor"
+        },
+        {
+          "rank": 10,
+          "us_county": "Morris County",
+          "eu_region": {
+            "nuts2_code": "BE10",
+            "name": "Région de Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest"
+          },
+          "mapping_rationale": "affluent suburban corporate corridor"
+        }
+      ]
+    }
+  ]
+}
