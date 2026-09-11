@@ -1134,7 +1134,7 @@ SPAN.tabHelpIcon:hover {
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  max-width: min(360px, 92vw);
+  max-width: min(380px, 92vw);
   pointer-events: none;
 }
 .floriaToastHost--top-right    { top: 0;    right: 0;  align-items: flex-end;   }
@@ -1143,35 +1143,64 @@ SPAN.tabHelpIcon:hover {
 .floriaToastHost--bottom-left  { bottom: 0; left: 0;   align-items: flex-start; flex-direction: column-reverse; }
 
 .floriaToast {
+  /* Theming token contract (defaults to light theme) */
+  --toast-bg: #fff;
+  --toast-color: #1a1f36;
+  --toast-border: transparent;
+  --toast-border-left: 4px solid var(--toast-info);
+  --toast-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --toast-radius: 8px;
+  --toast-font-size: 90%;
+  --toast-muted: #666;
+  --toast-close: #999;
+  --toast-close-hover: #333;
+  --toast-info: #5579c6;
+  --toast-success: #1c7c3f;
+  --toast-warning: #e0a400;
+  --toast-error: #d0362a;
+
   pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 10px;
   width: 100%;
-  background: white;
-  border-radius: 8px;
-  border-left: 4px solid #5579c6;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-border);
+  border-left: var(--toast-border-left);
+  border-radius: var(--toast-radius);
+  box-shadow: var(--toast-shadow);
   padding: 12px 14px;
-  font-size: 90%;
-  color: #1a1f36;
+  font-size: var(--toast-font-size);
+  color: var(--toast-color);
+  cursor: pointer;
   opacity: 0;
-  transform: translateY(-8px);
-  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.3s ease;
-}
-.floriaToastHost--bottom-right .floriaToast,
-.floriaToastHost--bottom-left  .floriaToast {
   transform: translateY(8px);
+  /* Default slow 3s fade-out when .show is removed */
+  transition: opacity 3s ease, transform 3s ease;
 }
+
+.floriaToastHost--top-right .floriaToast,
+.floriaToastHost--top-left  .floriaToast {
+  transform: translateY(-8px);
+}
+
 .floriaToast.show {
   opacity: 1;
   transform: translateY(0);
+  /* Quick entrance */
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-.floriaToast--info     { border-left-color: #5579c6; }
-.floriaToast--success  { border-left-color: #1c7c3f; }
-.floriaToast--warning  { border-left-color: #e0a400; }
-.floriaToast--error    { border-left-color: #d0362a; }
+.floriaToast.floriaToast--fastDismiss {
+  opacity: 0 !important;
+  transform: translateY(8px) !important;
+  transition: opacity 0.3s ease, transform 0.3s ease !important;
+}
+
+.floriaToast--info    { --toast-border-left: 4px solid var(--toast-info); }
+.floriaToast--success { --toast-border-left: 4px solid var(--toast-success); }
+.floriaToast--warning { --toast-border-left: 4px solid var(--toast-warning); }
+.floriaToast--error   { --toast-border-left: 4px solid var(--toast-error); }
 
 .floriaToastIcon {
   flex: 0 0 auto;
@@ -1179,17 +1208,28 @@ SPAN.tabHelpIcon:hover {
   height: 10px;
   margin-top: 4px;
   border-radius: 50%;
-  background: #5579c6;
+  background: var(--toast-info);
 }
-.floriaToast--info    .floriaToastIcon { background: #5579c6; }
-.floriaToast--success .floriaToastIcon { background: #1c7c3f; }
-.floriaToast--warning .floriaToastIcon { background: #e0a400; }
-.floriaToast--error   .floriaToastIcon { background: #d0362a; }
+.floriaToast--info    .floriaToastIcon { background: var(--toast-info); }
+.floriaToast--success .floriaToastIcon { background: var(--toast-success); }
+.floriaToast--warning .floriaToastIcon { background: var(--toast-warning); }
+.floriaToast--error   .floriaToastIcon { background: var(--toast-error); }
 
 .floriaToastBody {
   flex: 1 1 auto;
   min-width: 0;
   line-height: 1.4;
+}
+.floriaToastBody b {
+  display: block;
+  font-size: 1em;
+  margin-bottom: 2px;
+}
+.floriaToastBody small {
+  display: block;
+  color: var(--toast-muted);
+  font-size: 0.88em;
+  line-height: 1.35;
 }
 
 .floriaToastActions {
@@ -1199,9 +1239,9 @@ SPAN.tabHelpIcon:hover {
   margin-top: 6px;
 }
 .floriaToastAction {
-  border: 1px solid #5579c6;
-  background: #fff;
-  color: #5579c6;
+  border: 1px solid var(--toast-info);
+  background: var(--toast-bg);
+  color: var(--toast-info);
   border-radius: 6px;
   padding: 3px 10px;
   font-size: 85%;
@@ -1210,7 +1250,7 @@ SPAN.tabHelpIcon:hover {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .floriaToastAction:hover {
-  background: #5579c6;
+  background: var(--toast-info);
   color: #fff;
 }
 
@@ -1219,10 +1259,10 @@ SPAN.tabHelpIcon:hover {
   font-size: 18px;
   line-height: 1;
   font-weight: bold;
-  color: #999;
+  color: var(--toast-close);
   cursor: pointer;
   transition: color 0.2s ease;
 }
 .floriaToastClose:hover {
-  color: #333;
+  color: var(--toast-close-hover);
 }

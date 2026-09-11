@@ -120,3 +120,4 @@ FloriaSVGIcons.ICONS.STETHOSCOPE = (title, color=FloriaSVGIcons.COLORS.gray, siz
   <path d="M8 15a6 6 0 0 0 12 0v-3"/>
   <circle cx="20" cy="10" r="2"/>
 `, title, color, size);
+

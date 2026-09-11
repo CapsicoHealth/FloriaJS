@@ -841,7 +841,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       if (this._tabs.length > 0)
        setTimeout(function() { that.select(current); }, 10);
 
-      FloriaDOM.addEvent(elementId+"_TABHEADERS", "click", function(e, event, target) {
+      FloriaDOM.addEvent(elementId+"_TABHEADERS", "click", async function(e, event, target) {
         if (target.dataset.tabclose != null)
          {
            event.preventDefault();
@@ -852,7 +852,7 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
         var tabId = target.dataset.tabid;
         if (tabId == null)
          return; // click landed on the header strip itself (or the help icon — handled separately below), not a tab
-        that.select(tabId);
+        await that.select(tabId);
       }, null, true);
 
       if (this._reorderable)
@@ -1144,13 +1144,14 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
       this._options.onReorder?.(this._tabs);
     }
 
-   this.select = function(i)
+   this.select = async function(i)
     {
       var self = this; // captured so the setStatus closure passed to onSelectHandler below (a plain
                         // function, not an arrow function) can still reach this FloriaTabs instance
                         // after `this` itself is no longer in scope for it.
       i = 1*i;
       var t = this._tabs[i];
+      if (t == null) return;
       if (t._renderCount == null)
        t._renderCount = 0;
       var isFirstRender = t._renderCount == 0;
@@ -1171,6 +1172,8 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
            // call). See this function's docs above for the full contract/example.
            proceed = t.onSelectHandler(elementId+'_TABPANEL_'+(this._singleDiv==true?0:i), isFirstRender,
              function(status) { self.setTabStatus(i, status); });
+           if (proceed && typeof proceed.then === 'function')
+            proceed = await proceed;
          } catch (e)
          {
            console.error("Exception displaying tab '"+t.label+"': ", e);
@@ -1553,15 +1556,16 @@ function _escFpd(str) {
  * @param {Object} [opts]
  * @param {string} [opts.type]      - "info" (default) | "success" | "warning" | "error" — only
  *                                    changes the accent color/icon (".floriaToast--<type>").
- * @param {number} [opts.duration]  - Auto-dismiss delay in ms (default 5000). Pass 0 or false to
+ * @param {number} [opts.duration]  - Auto-dismiss delay in ms (default 6000). Pass 0 or false to
  *                                    require an explicit dismissal (close button or hide()).
- * @param {string} [opts.corner]   - Which screen corner to stack in: "top-right" (default),
- *                                    "top-left", "bottom-right", "bottom-left".
+ * @param {string} [opts.corner]   - Which screen corner to stack in: "bottom-right" (default),
+ *                                    "bottom-left", "top-right", "top-left".
  * @param {Array}  [opts.actions]  - Optional array of { label, onClick } — rendered as small buttons;
  *                                    onClick receives no arguments, and the toast is dismissed right
  *                                    after (return false from onClick to keep it open instead).
  *
  * @example
+ *   FloriaToast.show('Saved successfully.', 'Your changes are now live.', { type: 'success' });
  *   new FloriaToast('Saved successfully.', { type: 'success' }).show();
  *
  *   new FloriaToast('You are running low on credits.', {
@@ -1574,8 +1578,8 @@ export function FloriaToast(message, opts)
    var that = this;
    opts = opts || {};
    this._type     = opts.type || 'info';
-   this._duration = opts.duration === 0 || opts.duration === false ? 0 : (opts.duration || 5000);
-   this._corner   = opts.corner || 'top-right';
+   this._duration = opts.duration === 0 || opts.duration === false ? 0 : (opts.duration || 6000);
+   this._corner   = opts.corner || 'bottom-right';
    this._actions  = opts.actions || null;
 
    // One shared host <div> per corner, appended once to document.body — successive toasts in the
@@ -1592,6 +1596,8 @@ export function FloriaToast(message, opts)
 
    this._el = document.createElement('div');
    this._el.className = "floriaToast floriaToast--" + this._type;
+   this._el.setAttribute("role", "status");
+   this._el.setAttribute("title", "Click to dismiss");
    this._el.innerHTML =
        '<div class="floriaToastIcon"></div>'
      + '<div class="floriaToastBody">' + message + '</div>'
@@ -1600,16 +1606,29 @@ export function FloriaToast(message, opts)
          + '</div>')
      + '<div class="floriaToastClose" title="Dismiss">&times;</div>';
 
-   this._el.querySelector('.floriaToastClose').addEventListener('click', function() { that.hide(); });
+   this._el.querySelector('.floriaToastClose').addEventListener('click', function(e)
+    {
+      e.stopPropagation();
+      that.hide(true);
+    });
+
+   this._el.addEventListener('click', function(e)
+    {
+      if (e.target.closest && e.target.closest('.floriaToastAction'))
+        return;
+      that.hide(true);
+    });
+
    if (this._actions != null)
     this._el.querySelectorAll('.floriaToastAction').forEach(function(btn)
      {
-       btn.addEventListener('click', function()
+       btn.addEventListener('click', function(e)
         {
+          e.stopPropagation();
           var action = that._actions[1 * btn.dataset.idx];
           var keepOpen = action != null && action.onClick != null ? action.onClick() : undefined;
           if (keepOpen !== false)
-           that.hide();
+           that.hide(true);
         });
      });
 
@@ -1618,21 +1637,70 @@ export function FloriaToast(message, opts)
       that._host.appendChild(that._el);
       setTimeout(function() { that._el.classList.add('show'); }, 10);
       if (that._duration > 0)
-       that._hideTimer = setTimeout(function() { that.hide(); }, that._duration);
+       that._hideTimer = setTimeout(function() { that.hide(false); }, that._duration);
       return that;
     };
 
-   this.hide = function()
+   this.hide = function(fast)
     {
       if (that._hideTimer != null)
        { clearTimeout(that._hideTimer); that._hideTimer = null; }
-      that._el.classList.remove('show');
-      setTimeout(function()
+      if (fast)
        {
-         if (that._el.parentNode != null)
-          that._el.parentNode.removeChild(that._el);
-       }, 300); // matches module-dialog.css's .floriaToast transition duration
+         that._el.classList.add('floriaToast--fastDismiss');
+         that._el.classList.remove('show');
+         setTimeout(function()
+          {
+            if (that._el.parentNode != null)
+             that._el.parentNode.removeChild(that._el);
+          }, 300);
+       }
+      else
+       {
+         that._el.classList.remove('show');
+         setTimeout(function()
+          {
+            if (that._el.parentNode != null)
+             that._el.parentNode.removeChild(that._el);
+          }, 4100); // matches 4s fade-out in module-dialog.css
+       }
     };
+ };
+
+/**
+ * Convenience static helper to show a toast.
+ * Can be called as:
+ *   FloriaToast.show("Title", "Detail message", { type: 'success' })
+ *   FloriaToast.show("Message", { type: 'info' })
+ *   FloriaToast.show("Message")
+ *
+ * @param {string} titleOrMessage
+ * @param {string|Object} [detail]
+ * @param {Object} [opts]
+ */
+FloriaToast.show = function(titleOrMessage, detail, opts)
+ {
+   if (typeof detail === 'object' && detail !== null && opts === undefined)
+    {
+      opts = detail;
+      detail = null;
+    }
+   opts = opts || {};
+   var msg = '';
+   if (opts.rawHTML)
+    {
+      msg = (titleOrMessage ? '<b>' + titleOrMessage + '</b>' : '')
+          + (detail ? '<small>' + detail + '</small>' : '');
+    }
+   else
+    {
+      function esc(s) {
+        return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+      msg = (titleOrMessage ? '<b>' + esc(titleOrMessage) + '</b>' : '')
+          + (detail ? '<small>' + esc(detail) + '</small>' : '');
+    }
+   return new FloriaToast(msg, opts).show();
  };
 
 
