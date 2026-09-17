@@ -881,3 +881,73 @@ FloriaLogin.PopupOrganizations = {
 };
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// UTILITIES
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+ 
+// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Password UI
+// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+function PasswordUI(elementId){
+  var element = document.getElementById(elementId);
+  if (element == null)
+   {
+     console.error("Unable to find element with ID = "+elementId+".");
+     return;
+   }
+  var passwordRules = window.passwordRules || [];
+  this.passwordRules = passwordRules;
+  var str = "<TABLE>";
+  for (var i = 0; i < this.passwordRules.length; ++i)
+   {
+     var pr = this.passwordRules[i];
+     str+="<TR class=\"passwordRules\"><TD colspan=\"1\" data-index=\""+i+"\" class=\"error\">"+pr.description+"</TD></TR>";
+   }
+  str+="</TABLE>";
+  FloriaDOM.appendInnerHTML(element.parentNode, str);
+  // Gotta re-get the element since it was overwritten by the previous statement, creating a new DOM.
+  this.element = document.getElementById(elementId); 
+  this.element.addEventListener("keyup", function(){
+    var password = this.value;
+    var domRules = document.getElementsByClassName("passwordRules");
+    for(var i=0;i<domRules.length;i++){
+      var item = domRules[i];
+      var childEle = item.querySelector('td');
+      var index = parseInt(childEle.getAttribute('data-index'));
+      if (index == null || isNaN(index) == true)
+        continue;
+      var passwordRule = passwordRules[index];
+      var regexp = new RegExp(passwordRule.rule);
+      childEle.classList.remove("success", "error");
+      if(regexp.test(password))
+        {
+          childEle.classList.add("success");
+        }
+      else
+        {
+          childEle.classList.add("error");
+        }
+    }
+  });
+  this.isValid = function(){
+    var password = this.element.value;
+    var flag = true;
+    for(var i=0;i<this.passwordRules.length;i++){
+      var item = this.passwordRules[i];
+      var regexp = new RegExp(item.rule);
+      flag = regexp.test(password)
+      if(!flag){
+        break;
+      }
+    }
+    return flag
+  }
+}
+
+
