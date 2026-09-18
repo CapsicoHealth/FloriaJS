@@ -96,7 +96,8 @@
 </head>
 <body>
     <h1>IndexedDB LRU Cache - Practical Example</h1>
-    <p>This demonstrates the typical usage pattern you described: get from cache, if null, fetch from API, then put in cache.</p>
+    <p>This demonstrates the typical usage pattern: get from cache, if null, fetch from API, then put in cache. Serve this folder over http (ES modules will not load from <code>file://</code>).</p>
+    <div id="persistBanner"></div>
     
     <div class="example">
         <h2>Simulated API with Caching</h2>
@@ -125,7 +126,7 @@
     </div>
 
     <script type="module">
-        import { FloriaIndexedDBLRU } from './module-indexdb-lru.js';
+        import { FloriaIndexedDBLRU } from '../WebContent/floria.v2.0/module-indexdb-lru.js';
         
         // Statistics
         let stats = {
@@ -137,6 +138,10 @@
         
         // Initialize cache on page load
         await FloriaIndexedDBLRU.create('userDataCache', 5, 7);
+        const avail = FloriaIndexedDBLRU.getAvailability();
+        document.getElementById('persistBanner').innerHTML = avail.persistent
+            ? '<p class="info">IndexedDB is available — cache survives reloads.</p>'
+            : '<p class="cache-miss">IndexedDB is not available ('+(avail.reason || 'unknown')+'). Using in-memory cache for this page session only. Reloads will refetch. This is often browser privacy settings or corporate policy.</p>';
         
         function log(message, type = 'info') {
             const logDiv = document.getElementById('log');
@@ -304,7 +309,7 @@
         window.loadUser = loadUser;
         
         // Initial message
-        log('✨ Cache initialized (maxSize: 5, maxAge: 7 days)', 'info');
+        log('✨ Cache initialized (maxSize: 5, maxAge: 7 days, persistent: '+avail.persistent+')', 'info');
         log('Click buttons above to test caching behavior', 'info');
         updateStats();
     </script>

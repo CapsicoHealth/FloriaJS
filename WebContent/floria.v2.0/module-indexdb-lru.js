@@ -18,38 +18,61 @@
 
 /**
  * IndexedDB LRU Cache Module
- * Provides a persistent LRU cache implementation using IndexedDB with support for:
- * - Multiple stores with configurable max size and age
- * - Race condition handling for multi-tab scenarios
- * - Simple async/await interface
+ *
+ * Logical stores (create/get/put/...) share one IndexedDB object store so adding a
+ * cache never requires a version bump. If IndexedDB is missing, disabled by policy,
+ * or fails to open, operations fall back to an in-memory LRU for the page session.
+ *
+ * Recency (`dt`) is updated on both put() and get(), so eviction is true LRU.
+ * Cross-tab exclusion uses the Web Locks API when available; otherwise a per-page
+ * mutex serializes same-tab callers only.
  */
 
 const DB_NAME = "FloriaLRUCache";
-const DB_VERSION = 1;
+const ENTRIES_STORE = "entries";
+const OPEN_TIMEOUT_MS = 4000;
+const KEY_SEP = "\x1f";
 
-// Store metadata registry
 const STORE_METADATA = new Map();
-
-// Lock management for race condition prevention
 const LOCK_REGISTRY = new Map();
+const MEMORY = new Map(); // storeName -> Map(name -> {dt, data})
+
+let _dbPromise = null;
+let _persistent = false;
+let _availabilityReason = "not initialized; call create() first";
+
+function now() {
+  return Date.now();
+}
+
+function daysToMs(days) {
+  return days * 24 * 60 * 60 * 1000;
+}
+
+function entryId(storeName, name) {
+  return storeName + KEY_SEP + name;
+}
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label + " timed out after " + ms + "ms")), ms);
+    promise.then(
+      v => { clearTimeout(t); resolve(v); },
+      e => { clearTimeout(t); reject(e); }
+    );
+  });
+}
 
 /**
- * Acquire a lock for a specific operation to prevent race conditions
- * @param {string} key - Lock identifier
- * @returns {Promise<Function>} Release function
+ * Per-page mutex. JS is single-threaded, so the only race is overlapping awaits.
  */
-async function acquireLock(key) {
+async function acquirePageLock(key) {
   while (LOCK_REGISTRY.has(key)) {
     await LOCK_REGISTRY.get(key);
   }
-  
   let releaseFn;
-  const lockPromise = new Promise(resolve => {
-    releaseFn = resolve;
-  });
-  
+  const lockPromise = new Promise(resolve => { releaseFn = resolve; });
   LOCK_REGISTRY.set(key, lockPromise);
-  
   return () => {
     LOCK_REGISTRY.delete(key);
     releaseFn();
@@ -57,406 +80,475 @@ async function acquireLock(key) {
 }
 
 /**
- * Open or create the IndexedDB database
- * @param {string} storeName - Name of the object store
- * @returns {Promise<IDBDatabase>}
+ * Prefer Web Locks (cross-tab). Fall back to an in-page mutex.
  */
-function openDatabase(storeName) {
+async function withLock(key, fn) {
+  if (typeof navigator !== "undefined" && navigator.locks && typeof navigator.locks.request === "function") {
+    return navigator.locks.request("floria-lru:" + key, fn);
+  }
+  const release = await acquirePageLock(key);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+function idbReq(request) {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    
-    request.onerror = () => {
-      console.error("IndexedDB error:", request.error);
-      reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function isQuotaError(err) {
+  if (err == null) return false;
+  return err.name === "QuotaExceededError" || err.code === 22;
+}
+
+function indexedDBAvailable() {
+  try {
+    return typeof indexedDB !== "undefined" && indexedDB != null;
+  } catch (e) {
+    return false;
+  }
+}
+
+function openIndexedDB(version) {
+  return new Promise((resolve, reject) => {
+    if (indexedDBAvailable() == false) {
+      reject(new Error("IndexedDB is not present in this browser"));
+      return;
+    }
+
+    let request;
+    try {
+      request = version == null ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, version);
+    } catch (e) {
+      reject(e);
+      return;
+    }
+
+    request.onblocked = () => {
+      console.warn("FloriaIndexedDBLRU: open/upgrade blocked by another tab holding the database");
     };
-    
+
+    request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
+
     request.onsuccess = () => {
-      resolve(request.result);
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        _dbPromise = null;
+      };
+      db.onclose = () => {
+        _dbPromise = null;
+      };
+      resolve(db);
     };
-    
+
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
-      
-      // Create store if it doesn't exist
-      if (!db.objectStoreNames.contains(storeName)) {
-        const objectStore = db.createObjectStore(storeName, { keyPath: "name" });
-        objectStore.createIndex("name", "name", { unique: true });
-        objectStore.createIndex("dt", "dt", { unique: false });
+      // v1 created one object store per logical cache. Collapse to a single store.
+      const existing = Array.from(db.objectStoreNames);
+      for (let i = 0; i < existing.length; ++i) {
+        if (existing[i] !== ENTRIES_STORE)
+          db.deleteObjectStore(existing[i]);
+      }
+      if (db.objectStoreNames.contains(ENTRIES_STORE) == false) {
+        const os = db.createObjectStore(ENTRIES_STORE, { keyPath: "id" });
+        os.createIndex("store", "store", { unique: false });
+        os.createIndex("store_dt", ["store", "dt"], { unique: false });
       }
     };
   });
 }
 
-/**
- * Ensure object store exists in the database
- * @param {string} storeName - Name of the object store
- * @returns {Promise<void>}
- */
-async function ensureStoreExists(storeName) {
-  const db = await openDatabase(storeName);
-  
-  // If store doesn't exist, we need to close and reopen with version bump
-  if (!db.objectStoreNames.contains(storeName)) {
-    const currentVersion = db.version;
+function openDatabase() {
+  if (_dbPromise != null)
+    return _dbPromise;
+
+  _dbPromise = (async function() {
+    const db = await openIndexedDB(null);
+    if (db.objectStoreNames.contains(ENTRIES_STORE) == true)
+      return db;
+    const nextVersion = db.version + 1;
     db.close();
-    
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, currentVersion + 1);
-      
-      request.onerror = () => {
-        console.error("IndexedDB error:", request.error);
-        reject(request.error);
-      };
-      
-      request.onsuccess = () => {
-        request.result.close();
-        resolve();
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains(storeName)) {
-          const objectStore = db.createObjectStore(storeName, { keyPath: "name" });
-          objectStore.createIndex("name", "name", { unique: true });
-          objectStore.createIndex("dt", "dt", { unique: false });
-        }
-      };
-    });
+    return openIndexedDB(nextVersion);
+  })();
+
+  return _dbPromise;
+}
+
+async function probePersistent() {
+  if (_persistent == true && _dbPromise != null)
+    return true;
+  if (indexedDBAvailable() == false) {
+    _persistent = false;
+    _availabilityReason = "IndexedDB is not present (disabled browser, private mode, or corporate policy).";
+    return false;
   }
-  
-  db.close();
+  try {
+    await withTimeout(openDatabase(), OPEN_TIMEOUT_MS, "IndexedDB open");
+    _persistent = true;
+    _availabilityReason = null;
+    return true;
+  } catch (e) {
+    _dbPromise = null;
+    _persistent = false;
+    _availabilityReason = (e && e.message) ? e.message : String(e);
+    console.warn("FloriaIndexedDBLRU: falling back to in-memory cache:", _availabilityReason);
+    return false;
+  }
 }
 
-/**
- * Get current timestamp
- * @returns {number}
- */
-function now() {
-  return Date.now();
+function degrade(reason) {
+  _persistent = false;
+  _availabilityReason = reason || "IndexedDB operation failed";
+  _dbPromise = null;
+  console.warn("FloriaIndexedDBLRU: " + _availabilityReason + " — using in-memory cache for this page session.");
 }
 
-/**
- * Convert days to milliseconds
- * @param {number} days
- * @returns {number}
- */
-function daysToMs(days) {
-  return days * 24 * 60 * 60 * 1000;
+function memMap(storeName) {
+  let m = MEMORY.get(storeName);
+  if (m == null) {
+    m = new Map();
+    MEMORY.set(storeName, m);
+  }
+  return m;
+}
+
+function memGet(storeName, name, metadata) {
+  const m = memMap(storeName);
+  const rec = m.get(name);
+  if (rec == null)
+    return null;
+  if ((now() - rec.dt) > metadata.maxAgeMs) {
+    m.delete(name);
+    return null;
+  }
+  rec.dt = now();
+  return rec.data;
+}
+
+function memPut(storeName, name, data, metadata) {
+  const m = memMap(storeName);
+  m.set(name, { dt: now(), data: data });
+  while (m.size > metadata.maxSizeCount) {
+    let oldestKey = null;
+    let oldestDt = Infinity;
+    for (const [k, v] of m) {
+      if (v.dt < oldestDt) {
+        oldestDt = v.dt;
+        oldestKey = k;
+      }
+    }
+    if (oldestKey == null)
+      break;
+    m.delete(oldestKey);
+  }
+}
+
+function memDelete(storeName, name) {
+  memMap(storeName).delete(name);
+}
+
+function memClear(storeName) {
+  MEMORY.delete(storeName);
+}
+
+function memCount(storeName) {
+  return memMap(storeName).size;
+}
+
+function memKeys(storeName) {
+  return Array.from(memMap(storeName).keys());
+}
+
+function cursorDeleteOldest(index, range, n, skipId) {
+  return new Promise((resolve, reject) => {
+    if (n <= 0) {
+      resolve(0);
+      return;
+    }
+    const request = index.openCursor(range, "next");
+    let left = n;
+    let deleted = 0;
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor == null || left <= 0) {
+        resolve(deleted);
+        return;
+      }
+      if (skipId != null && cursor.value && cursor.value.id === skipId) {
+        cursor.continue();
+        return;
+      }
+      cursor.delete();
+      deleted++;
+      left--;
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbGet(storeName, name, metadata) {
+  const db = await openDatabase();
+  const tx = db.transaction(ENTRIES_STORE, "readwrite");
+  const os = tx.objectStore(ENTRIES_STORE);
+  const rec = await idbReq(os.get(entryId(storeName, name)));
+  if (rec == null)
+    return null;
+  if ((now() - rec.dt) > metadata.maxAgeMs) {
+    await idbReq(os.delete(rec.id));
+    return null;
+  }
+  rec.dt = now();
+  await idbReq(os.put(rec));
+  return rec.data;
+}
+
+async function idbPut(storeName, name, data, metadata) {
+  const db = await openDatabase();
+  const id = entryId(storeName, name);
+  const record = { id: id, store: storeName, name: name, dt: now(), data: data };
+
+  const writeOnce = async function() {
+    const tx = db.transaction(ENTRIES_STORE, "readwrite");
+    const os = tx.objectStore(ENTRIES_STORE);
+    await idbReq(os.put(record));
+    const storeIndex = os.index("store");
+    const count = await idbReq(storeIndex.count(IDBKeyRange.only(storeName)));
+    if (count > metadata.maxSizeCount) {
+      const dtIndex = os.index("store_dt");
+      const range = IDBKeyRange.bound([storeName, 0], [storeName, Number.MAX_SAFE_INTEGER]);
+      await cursorDeleteOldest(dtIndex, range, count - metadata.maxSizeCount, id);
+    }
+  };
+
+  try {
+    await writeOnce();
+  } catch (e) {
+    if (isQuotaError(e) == false)
+      throw e;
+    const tx = db.transaction(ENTRIES_STORE, "readwrite");
+    const os = tx.objectStore(ENTRIES_STORE);
+    const dtIndex = os.index("store_dt");
+    const range = IDBKeyRange.bound([storeName, 0], [storeName, Number.MAX_SAFE_INTEGER]);
+    const storeIndex = os.index("store");
+    const count = await idbReq(storeIndex.count(IDBKeyRange.only(storeName)));
+    await cursorDeleteOldest(dtIndex, range, Math.max(1, Math.ceil(count / 2)), id);
+    await writeOnce();
+  }
+}
+
+async function idbDelete(storeName, name) {
+  const db = await openDatabase();
+  const tx = db.transaction(ENTRIES_STORE, "readwrite");
+  const os = tx.objectStore(ENTRIES_STORE);
+  await idbReq(os.delete(entryId(storeName, name)));
+}
+
+async function idbClear(storeName) {
+  const db = await openDatabase();
+  const tx = db.transaction(ENTRIES_STORE, "readwrite");
+  const os = tx.objectStore(ENTRIES_STORE);
+  const index = os.index("store");
+  await new Promise((resolve, reject) => {
+    const request = index.openCursor(IDBKeyRange.only(storeName));
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor == null) {
+        resolve();
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbCount(storeName) {
+  const db = await openDatabase();
+  const tx = db.transaction(ENTRIES_STORE, "readonly");
+  const os = tx.objectStore(ENTRIES_STORE);
+  return idbReq(os.index("store").count(IDBKeyRange.only(storeName)));
+}
+
+async function idbKeys(storeName) {
+  const db = await openDatabase();
+  const tx = db.transaction(ENTRIES_STORE, "readonly");
+  const os = tx.objectStore(ENTRIES_STORE);
+  const index = os.index("store");
+  return new Promise((resolve, reject) => {
+    const keys = [];
+    const request = index.openCursor(IDBKeyRange.only(storeName));
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor == null) {
+        resolve(keys);
+        return;
+      }
+      keys.push(cursor.value.name);
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function requireMetadata(storeName, method) {
+  const metadata = STORE_METADATA.get(storeName);
+  if (metadata == null)
+    throw new Error("FloriaIndexedDBLRU." + method + ": store '" + storeName + "' not created. Call create() first.");
+  return metadata;
 }
 
 export var FloriaIndexedDBLRU = {
-  
+
   /**
-   * Create or retrieve an LRU cache store
-   * @param {string} storeName - Name of the store
-   * @param {number} maxSizeCount - Maximum number of entries in the store
-   * @param {number} maxAgeDays - Maximum age of entries in days
-   * @returns {Promise<Object>} Store configuration object
+   * Create (or reconfigure) a logical cache store.
+   * Never throws because of IndexedDB unavailability — falls back to memory.
+   * @returns {Promise<Object>} Store metadata including `persistent`
    */
   create: async function(storeName, maxSizeCount=20, maxAgeDays=7) {
-    if (!storeName || typeof storeName !== "string") {
+    if (!storeName || typeof storeName !== "string")
       throw new Error("storeName must be a non-empty string");
-    }
-    
-    // Ensure the store exists in IndexedDB
-    await ensureStoreExists(storeName);
-    
-    // Store metadata for this store
+    if (typeof maxSizeCount !== "number" || maxSizeCount < 1)
+      throw new Error("maxSizeCount must be a positive number");
+    if (typeof maxAgeDays !== "number" || maxAgeDays <= 0)
+      throw new Error("maxAgeDays must be a positive number");
+
+    const persistent = await probePersistent();
     const metadata = {
       storeName: storeName,
       maxSizeCount: maxSizeCount,
       maxAgeDays: maxAgeDays,
-      maxAgeMs: daysToMs(maxAgeDays)
+      maxAgeMs: daysToMs(maxAgeDays),
+      persistent: persistent
     };
-    
     STORE_METADATA.set(storeName, metadata);
-    
     return metadata;
   },
-  
+
   /**
-   * Get an entry from the cache
-   * @param {string} storeName - Name of the store
-   * @param {string} name - Key to retrieve
-   * @returns {Promise<any|null>} The data if found and valid, null otherwise
+   * Whether the last create()/probe succeeded in opening IndexedDB.
+   * False means get/put are in-memory only for this page session.
    */
+  isPersistent: function() {
+    return _persistent == true;
+  },
+
+  /**
+   * @returns {{persistent:boolean, reason:string|null}}
+   */
+  getAvailability: function() {
+    return { persistent: _persistent == true, reason: _availabilityReason };
+  },
+
   get: async function(storeName, name) {
     if (!storeName || !name) {
       console.warn("FloriaIndexedDBLRU.get: storeName and name are required");
       return null;
     }
-    
     const metadata = STORE_METADATA.get(storeName);
-    if (!metadata) {
+    if (metadata == null) {
       console.warn("FloriaIndexedDBLRU.get: store '" + storeName + "' not created. Call create() first.");
       return null;
     }
-    
-    const release = await acquireLock(storeName + ":" + name);
-    
-    try {
-      const db = await openDatabase(storeName);
-      
-      return await new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], "readwrite");
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.get(name);
-        
-        request.onerror = () => {
-          console.error("Error retrieving entry:", request.error);
-          reject(request.error);
-        };
-        
-        request.onsuccess = () => {
-          const record = request.result;
-          
-          if (!record) {
-            db.close();
-            resolve(null);
-            return;
-          }
-          
-          // Check if record is expired
-          const age = now() - record.dt;
-          if (age > metadata.maxAgeMs) {
-            // Record is expired, delete it
-            const deleteRequest = objectStore.delete(name);
-            
-            deleteRequest.onerror = () => {
-              console.error("Error deleting expired entry:", deleteRequest.error);
-            };
-            
-            deleteRequest.onsuccess = () => {
-              db.close();
-              resolve(null);
-            };
-          } else {
-            db.close();
-            resolve(record.data);
-          }
-        };
-      });
-    } finally {
-      release();
-    }
+
+    return withLock(storeName, async () => {
+      if (_persistent == true) {
+        try {
+          return await idbGet(storeName, name, metadata);
+        } catch (e) {
+          degrade("IndexedDB get failed: " + (e && e.message ? e.message : e));
+        }
+      }
+      return memGet(storeName, name, metadata);
+    });
   },
-  
-  /**
-   * Put an entry into the cache
-   * @param {string} storeName - Name of the store
-   * @param {string} name - Key to store
-   * @param {any} data - Data to store
-   * @returns {Promise<void>}
-   */
+
   put: async function(storeName, name, data) {
-    if (!storeName || !name) {
+    if (!storeName || !name)
       throw new Error("storeName and name are required");
-    }
-    
-    const metadata = STORE_METADATA.get(storeName);
-    if (!metadata) {
-      throw new Error("Store '" + storeName + "' not created. Call create() first.");
-    }
-    
-    const release = await acquireLock(storeName + ":" + name);
-    
-    try {
-      const db = await openDatabase(storeName);
-      
-      await new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], "readwrite");
-        const objectStore = transaction.objectStore(storeName);
-        
-        // Create the record
-        const record = {
-          name: name,
-          dt: now(),
-          data: data
-        };
-        
-        // Put the record
-        const putRequest = objectStore.put(record);
-        
-        putRequest.onerror = () => {
-          console.error("Error putting entry:", putRequest.error);
-          reject(putRequest.error);
-        };
-        
-        putRequest.onsuccess = () => {
-          // Check if we need to evict old entries
-          const countRequest = objectStore.count();
-          
-          countRequest.onsuccess = () => {
-            const count = countRequest.result;
-            
-            if (count > metadata.maxSizeCount) {
-              // Need to delete oldest entries
-              const index = objectStore.index("dt");
-              const cursorRequest = index.openCursor(null, "next"); // Oldest first
-              let deleteCount = count - metadata.maxSizeCount;
-              
-              cursorRequest.onsuccess = (event) => {
-                const cursor = event.target.result;
-                
-                if (cursor && deleteCount > 0) {
-                  objectStore.delete(cursor.primaryKey);
-                  deleteCount--;
-                  cursor.continue();
-                } else {
-                  db.close();
-                  resolve();
-                }
-              };
-              
-              cursorRequest.onerror = () => {
-                console.error("Error during eviction:", cursorRequest.error);
-                db.close();
-                reject(cursorRequest.error);
-              };
-            } else {
-              db.close();
-              resolve();
-            }
-          };
-          
-          countRequest.onerror = () => {
-            console.error("Error counting entries:", countRequest.error);
-            db.close();
-            reject(countRequest.error);
-          };
-        };
-      });
-    } finally {
-      release();
-    }
+    const metadata = requireMetadata(storeName, "put");
+
+    return withLock(storeName, async () => {
+      if (_persistent == true) {
+        try {
+          await idbPut(storeName, name, data, metadata);
+          return;
+        } catch (e) {
+          if (e && e.name === "DataCloneError")
+            throw e;
+          degrade("IndexedDB put failed: " + (e && e.message ? e.message : e));
+        }
+      }
+      memPut(storeName, name, data, metadata);
+    });
   },
-  
-  /**
-   * Clear all entries from a store
-   * @param {string} storeName - Name of the store
-   * @returns {Promise<void>}
-   */
+
   clear: async function(storeName) {
-    if (!storeName) {
+    if (!storeName)
       throw new Error("storeName is required");
-    }
-    
-    const release = await acquireLock(storeName + ":__clear__");
-    
-    try {
-      const db = await openDatabase(storeName);
-      
-      await new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], "readwrite");
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.clear();
-        
-        request.onerror = () => {
-          console.error("Error clearing store:", request.error);
-          reject(request.error);
-        };
-        
-        request.onsuccess = () => {
-          db.close();
-          resolve();
-        };
-      });
-    } finally {
-      release();
-    }
+    requireMetadata(storeName, "clear");
+
+    return withLock(storeName, async () => {
+      memClear(storeName);
+      if (_persistent == true) {
+        try {
+          await idbClear(storeName);
+        } catch (e) {
+          degrade("IndexedDB clear failed: " + (e && e.message ? e.message : e));
+        }
+      }
+    });
   },
-  
-  /**
-   * Delete a specific entry from the cache
-   * @param {string} storeName - Name of the store
-   * @param {string} name - Key to delete
-   * @returns {Promise<void>}
-   */
+
   delete: async function(storeName, name) {
-    if (!storeName || !name) {
+    if (!storeName || !name)
       throw new Error("storeName and name are required");
-    }
-    
-    const release = await acquireLock(storeName + ":" + name);
-    
-    try {
-      const db = await openDatabase(storeName);
-      
-      await new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], "readwrite");
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.delete(name);
-        
-        request.onerror = () => {
-          console.error("Error deleting entry:", request.error);
-          reject(request.error);
-        };
-        
-        request.onsuccess = () => {
-          db.close();
-          resolve();
-        };
-      });
-    } finally {
-      release();
-    }
+    requireMetadata(storeName, "delete");
+
+    return withLock(storeName, async () => {
+      memDelete(storeName, name);
+      if (_persistent == true) {
+        try {
+          await idbDelete(storeName, name);
+        } catch (e) {
+          degrade("IndexedDB delete failed: " + (e && e.message ? e.message : e));
+        }
+      }
+    });
   },
-  
-  /**
-   * Get the count of entries in a store
-   * @param {string} storeName - Name of the store
-   * @returns {Promise<number>}
-   */
+
   count: async function(storeName) {
-    if (!storeName) {
+    if (!storeName)
       throw new Error("storeName is required");
+    requireMetadata(storeName, "count");
+    if (_persistent == true) {
+      try {
+        return await idbCount(storeName);
+      } catch (e) {
+        degrade("IndexedDB count failed: " + (e && e.message ? e.message : e));
+      }
     }
-    
-    const db = await openDatabase(storeName);
-    
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([storeName], "readonly");
-      const objectStore = transaction.objectStore(storeName);
-      const request = objectStore.count();
-      
-      request.onerror = () => {
-        console.error("Error counting entries:", request.error);
-        reject(request.error);
-      };
-      
-      request.onsuccess = () => {
-        db.close();
-        resolve(request.result);
-      };
-    });
+    return memCount(storeName);
   },
-  
-  /**
-   * Get all keys in a store
-   * @param {string} storeName - Name of the store
-   * @returns {Promise<Array<string>>}
-   */
+
   getAllKeys: async function(storeName) {
-    if (!storeName) {
+    if (!storeName)
       throw new Error("storeName is required");
+    requireMetadata(storeName, "getAllKeys");
+    if (_persistent == true) {
+      try {
+        return await idbKeys(storeName);
+      } catch (e) {
+        degrade("IndexedDB getAllKeys failed: " + (e && e.message ? e.message : e));
+      }
     }
-    
-    const db = await openDatabase(storeName);
-    
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([storeName], "readonly");
-      const objectStore = transaction.objectStore(storeName);
-      const request = objectStore.getAllKeys();
-      
-      request.onerror = () => {
-        console.error("Error getting all keys:", request.error);
-        reject(request.error);
-      };
-      
-      request.onsuccess = () => {
-        db.close();
-        resolve(request.result);
-      };
-    });
+    return memKeys(storeName);
   }
 };
