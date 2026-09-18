@@ -34,6 +34,50 @@ export var FloriaCharts2 = { ColorSchemes : ChartTheme.colorSchemes, ChartJS: Ch
 Chart.register(...registerables);
 Chart.register([ChartDataLabels, Tooltip]);
 
+// Optional vertical marker on a numeric/category X scale (e.g. "Anchor" on Month 1).
+// Driven by Chart.setXMarker(); no-op unless options.plugins.floriaXMarker is set.
+const _FLORIA_X_MARKER_PLUGIN = {
+  id: "floriaXMarker",
+  afterDraw: function(chart) {
+    let marker = chart.options?.plugins?.floriaXMarker;
+    if (marker == null || marker === false || marker.x == null || marker.x === "")
+     return;
+    let xScale = chart.scales?.x;
+    let yScale = chart.scales?.y;
+    if (xScale == null || yScale == null)
+     return;
+    if (marker.x < xScale.min || marker.x > xScale.max)
+     return;
+    let x = xScale.getPixelForValue(marker.x);
+    let area = chart.chartArea;
+    if (area == null)
+     return;
+    let ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+    ctx.clip();
+    ctx.strokeStyle = marker.color || "#2e8b57";
+    ctx.lineWidth = marker.lineWidth || 2;
+    ctx.setLineDash(marker.dash || [5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, area.top);
+    ctx.lineTo(x, area.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (marker.label)
+     {
+       ctx.fillStyle = marker.color || "#2e8b57";
+       ctx.font = marker.font || "bold 11px sans-serif";
+       ctx.textAlign = "center";
+       ctx.textBaseline = "top";
+       ctx.fillText(marker.label, x, area.top + 4);
+     }
+    ctx.restore();
+  }
+};
+Chart.register(_FLORIA_X_MARKER_PLUGIN);
+
 Tooltip.positioners.cursor = function(chartElements, coordinates) {
    return { x: coordinates.x+(this.xAlign=="left"?-20:+20), y: coordinates.y+10 };
  };
@@ -556,7 +600,8 @@ FloriaCharts2.Chart = function(divId)
    this._tooltip = null;
    this._legend = null;
    this._chart = null;
-   
+   this._xMarker = null;
+    
    this.setTitle = function(title, fontSpec /*weight, style, size, family*/, position)
     {
       this._title = { display: title != null
@@ -612,7 +657,7 @@ FloriaCharts2.Chart = function(divId)
    // behavior at all.
    this._buildDatasetObject=function(chartType, dataset
                             ,labels /*labelFull, labelSimple*/
-                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius, pointStyle*/
+                            ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius*/
                             ,visualSpecsHover /*backgroundColor, backgroundColorFaded, borderColor, borderWidth, radius*/
                             ,yAxisID /*'y' (default) or 'y1' (secondary)*/
                             )
@@ -883,6 +928,19 @@ FloriaCharts2.Chart = function(divId)
      return this;
     }
 
+   this.setXMarker = function(xValue, label, color, extra /*lineWidth, dash, font*/)
+    {
+      this._xMarker = xValue == null || xValue === "" ? null
+                    : { x: xValue
+                       ,label: label || ""
+                       ,color: color || "#2e8b57"
+                       ,lineWidth: extra?.lineWidth
+                       ,dash: extra?.dash
+                       ,font: extra?.font
+                      };
+      return this;
+    }
+
    this.setClickHandler=function(handlerFunc /*f(dataElement)*/)
     {
       this._clickHandler = function(evt, item, legend)
@@ -1001,7 +1059,7 @@ FloriaCharts2.Chart = function(divId)
       return this;
     };
     
-   this.setSelectOptions = function(options, onChangeFunc)
+   this.setSelectOptions = function(options, onChangeFunc, selectedVal)
     {
       if ((options == null || options.length == 0) && onChangeFunc != null)
        return FloriaDOM.consoleThrow("FloriaCharts2.Chart.setSelectOptions called with an options handler function, but no options.");
@@ -1009,6 +1067,7 @@ FloriaCharts2.Chart = function(divId)
        return FloriaDOM.consoleThrow("FloriaCharts2.Chart.setSelectOptions called with options, but no options handler function.");
       this._selectOptions = options;
       this._selectOnChange = onChangeFunc;
+      this._selectSelectedVal = selectedVal;
     }
    this.setChartOptions = function(options, selectedChartOption, onChangeFunc)
     {
@@ -1046,6 +1105,7 @@ FloriaCharts2.Chart = function(divId)
                title: this._title
               ,tooltip: this._tooltip
               ,legend: this._legend
+              ,floriaXMarker: this._xMarker || false
              }
           }
        }
@@ -1137,7 +1197,10 @@ FloriaCharts2.Chart = function(divId)
              {
                str+='<SELECT id="'+that._divId+'_SELECT">';
                for (let i = 0; i < that._selectOptions.length; ++i)
-                str+='<OPTION value="'+that._selectOptions[i].val+'" '+(i==0?'selected':'')+'>'+that._selectOptions[i].label+'</OPTION>';
+                {
+                  let isSel = that._selectSelectedVal != null ? that._selectOptions[i].val == that._selectSelectedVal : i==0;
+                  str+='<OPTION value="'+that._selectOptions[i].val+'" '+(isSel?'selected':'')+'>'+that._selectOptions[i].label+'</OPTION>';
+                }
                str+='</SELECT>';
              }
             if (that._chartOptions?.length > 0)
@@ -1206,6 +1269,12 @@ FloriaCharts2.Chart = function(divId)
        }
     }
     
+   this.resize=function()
+    {
+      if (this._chart != null)
+       this._chart.resize();
+    }
+
    this.destroy=function()
     {
       if (this._chart != null)
@@ -1216,3 +1285,7 @@ FloriaCharts2.Chart = function(divId)
     }    
 };
 
+FloriaCharts2.Chart.getLiveChart = function(divId)
+ {
+   return CHART_REGISTRY[divId];
+ };
