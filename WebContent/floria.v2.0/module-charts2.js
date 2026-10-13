@@ -22,8 +22,9 @@ import { ChartTheme } from "./module-charttheme.js";
 import { FloriaAjax }  from "./module-ajax.js";
 import { FloriaTooltipDialog }  from "./module-dialog.js";
 
-import { Chart, Tooltip , registerables } from "/static/jslibs/chartjs-4.4.3/chart.js";
+import { Chart, Tooltip , registerables } from "/static/jslibs/chartjs-4.5.1/chart.js";
 import ChartDataLabels  from "/static/jslibs/chartjs-plugin-datalabels-2.2.0/chartjs-plugin-datalabels.esm.js";
+import { BoxPlotController, BoxAndWiskers } from "/static/jslibs/chartjs-chart-boxplot-4.4.5/chartjs-chart-boxplot.esm.js";
 
 import {map,tileLayer,geoJson, circleMarker, Icon, marker,latLng, latLngBounds,control,DomUtil,Control,DomEvent} from "/static/jslibs/leaflet/leaflet-src.esm.js";
 
@@ -33,6 +34,7 @@ FloriaDOM.injectCSSLink("FLORIA_CSS_ANCHOR", true, "/static/jslibs/leaflet/leafl
 export var FloriaCharts2 = { ColorSchemes : ChartTheme.colorSchemes, ChartJS: Chart };
 Chart.register(...registerables);
 Chart.register([ChartDataLabels, Tooltip]);
+Chart.register(BoxPlotController, BoxAndWiskers);
 
 // Optional vertical marker on a numeric/category X scale (e.g. "Anchor" on Month 1).
 // Driven by Chart.setXMarker(); no-op unless options.plugins.floriaXMarker is set.
@@ -77,6 +79,110 @@ const _FLORIA_X_MARKER_PLUGIN = {
   }
 };
 Chart.register(_FLORIA_X_MARKER_PLUGIN);
+
+// Draw an optional per-point range behind its line, using raw bounds carried alongside x/y.
+const _RANGE_TINT_CACHE = new Map();
+function _getRangeTint(color)
+ {
+   if (typeof color != 'string')
+    return 'rgba(128, 128, 128, 0.18)';
+   if (_RANGE_TINT_CACHE.has(color))
+    return _RANGE_TINT_CACHE.get(color);
+   let canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+   let ctx = canvas.getContext('2d');
+  if (ctx == null)
+   return 'rgba(128, 128, 128, 0.18)';
+   ctx.fillStyle = '#010203';
+   ctx.fillStyle = color;
+   let normalizedColor = ctx.fillStyle;
+  if (normalizedColor == '#010203' && color.trim().toLowerCase() != '#010203' && color.trim().toLowerCase() != 'rgb(1, 2, 3)')
+    return 'rgba(128, 128, 128, 0.18)';
+  ctx.fillRect(0, 0, 1, 1);
+  let pixel = ctx.getImageData(0, 0, 1, 1).data;
+  if (pixel[3] == 0)
+   return 'rgba(128, 128, 128, 0.18)';
+  let channels = [pixel[0], pixel[1], pixel[2]];
+   let tint = 'rgba('+channels.map(function(channel) { return Math.round(channel + (255 - channel) * 0.85); }).join(',')+',0.65)';
+   _RANGE_TINT_CACHE.set(color, tint);
+   return tint;
+ }
+const _FLORIA_RANGE_PLUGIN = {
+  id: "floriaRange",
+  beforeDatasetsDraw: function(chart) {
+    let area = chart.chartArea;
+    if (area == null)
+     return;
+    let ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+    ctx.clip();
+    for (let datasetIndex = 0; datasetIndex < chart.data.datasets.length; ++datasetIndex)
+     {
+       let dataset = chart.data.datasets[datasetIndex];
+      if (!chart.isDatasetVisible(datasetIndex) || (dataset.type || chart.config.type) != 'line' || dataset.floriaRange === false)
+        continue;
+       let range = dataset.floriaRange || {};
+      let rangeKey = range.rangeKey || 'range';
+      let lowerKey = range.lowerKey || 'lower_95_confidence';
+      let upperKey = range.upperKey || 'upper_95_confidence';
+       let meta = chart.getDatasetMeta(datasetIndex);
+       let yScale = chart.scales[meta.yAxisID || dataset.yAxisID || 'y'];
+       if (yScale == null || meta.data == null)
+        continue;
+       let segments = [];
+       let segment = [];
+       for (let pointIndex = 0; pointIndex < dataset.data.length; ++pointIndex)
+        {
+          let row = dataset.data[pointIndex];
+          let element = meta.data[pointIndex];
+          let bounds = row?.[rangeKey];
+          let lower = Array.isArray(bounds) ? bounds[range.lowerIndex ?? 0] : row?.[lowerKey];
+          let upper = Array.isArray(bounds) ? bounds[range.upperIndex ?? 1] : row?.[upperKey];
+          let center = row?.y;
+          if (lower == null && upper == null)
+           {
+             if (segment.length > 1)
+              segments.push(segment);
+             segment = [];
+             continue;
+           }
+          lower = lower == null ? center : lower;
+          upper = upper == null ? center : upper;
+          if (element == null || element.skip || center == null || !Number.isFinite(Number(lower)) || !Number.isFinite(Number(upper)))
+           {
+             if (segment.length > 1)
+              segments.push(segment);
+             segment = [];
+             continue;
+           }
+          segment.push({ x: element.x, lower: yScale.getPixelForValue(lower), upper: yScale.getPixelForValue(upper) });
+        }
+       if (segment.length > 1)
+        segments.push(segment);
+       if (segments.length == 0)
+        continue;
+      let lineColor = meta.dataset?.options?.borderColor ?? dataset.borderColor ?? meta.data[0]?.options?.borderColor;
+      ctx.fillStyle = range.backgroundColor || _getRangeTint(lineColor);
+       for (let i = 0; i < segments.length; ++i)
+        {
+          let points = segments[i];
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].upper);
+          for (let j = 1; j < points.length; ++j)
+           ctx.lineTo(points[j].x, points[j].upper);
+          for (let j = points.length - 1; j >= 0; --j)
+           ctx.lineTo(points[j].x, points[j].lower);
+          ctx.closePath();
+          ctx.fill();
+        }
+     }
+    ctx.restore();
+  }
+};
+Chart.register(_FLORIA_RANGE_PLUGIN);
 
 Tooltip.positioners.cursor = function(chartElements, coordinates) {
    return { x: coordinates.x+(this.xAlign=="left"?-20:+20), y: coordinates.y+10 };
@@ -601,6 +707,7 @@ FloriaCharts2.Chart = function(divId)
    this._legend = null;
    this._chart = null;
    this._xMarker = null;
+  this._boxPlotLabels = null;
     
    this.setTitle = function(title, fontSpec /*weight, style, size, family*/, position)
     {
@@ -806,13 +913,44 @@ FloriaCharts2.Chart = function(divId)
                         ,visualSpecs /*backgroundColor, backgroundColorFaded, borderColor, borderColorFaded, borderWidth, radius, pointBorderWidth */
                         ,visualSpecsHover /*backgroundColor, backgroundColorFaded, borderColor, borderWidth, radius, pointBorderWidth */
                         ,yAxisID /*'y' (default) or 'y1' (secondary)*/
+                        ,range /*rangeKey, lowerIndex, upperIndex, backgroundColor; range defaults to [lower, upper], with backgroundColor tinted from the line color*/
                         )
     {
       dataset = this._addDataset ('line', dataset, labels, visualSpecs, visualSpecsHover, yAxisID);
       dataset.pointBorderWidth = visualSpecs?.pointBorderWidth;
       dataset.hoverPointBorderWidth = visualSpecsHover?.pointBorderWidth;
+      dataset.floriaRange = range === false ? false : {
+         rangeKey: range?.rangeKey || 'range'
+        ,lowerIndex: range?.lowerIndex ?? 0
+        ,upperIndex: range?.upperIndex ?? 1
+        ,lowerKey: range?.lowerKey || 'lower_95_confidence'
+        ,upperKey: range?.upperKey || 'upper_95_confidence'
+        ,backgroundColor: range?.backgroundColor || visualSpecs?.rangeBackgroundColor
+       };
       return this;
     }    
+
+   this.addBoxPlot=function(dataset
+                           ,labels /*labelFull, labelSimple*/
+                           ,visualSpecs /*backgroundColor, borderColor, borderWidth plus boxplot statistics and element options*/
+                           ,visualSpecsHover /*backgroundColor, borderColor, borderWidth*/
+                           ,yAxisID /*'y' (default) or 'y1' (secondary)*/
+                           )
+    {
+      if (!Array.isArray(dataset) || dataset.some(function(point) { return point?.x == null || point.values == null; }))
+       return FloriaDOM.consoleThrow("FloriaCharts2.Chart.addBoxPlot expects [{x: category, values: samplesOrStats}, ...].");
+      let categoryLabels = dataset.map(function(point) { return point.x; });
+      if (this._boxPlotLabels != null && (this._boxPlotLabels.length != categoryLabels.length || this._boxPlotLabels.some(function(label, index) { return label != categoryLabels[index]; })))
+       return FloriaDOM.consoleThrow("FloriaCharts2.Chart.addBoxPlot datasets must use the same categories in the same order.");
+      this._boxPlotLabels = categoryLabels;
+      let boxData = dataset.map(function(point) { return point.values; });
+      let boxDataset = this._addDataset('boxplot', boxData, labels, visualSpecs, visualSpecsHover, yAxisID);
+      let boxOptionNames = ['coef', 'quantiles', 'whiskersMode', 'minStats', 'maxStats', 'medianColor', 'lowerBackgroundColor', 'outlierBackgroundColor', 'outlierBorderColor', 'outlierBorderWidth', 'outlierRadius', 'outlierStyle', 'meanBackgroundColor', 'meanBorderColor', 'meanBorderWidth', 'meanRadius', 'meanStyle', 'itemBackgroundColor', 'itemBorderColor', 'itemBorderWidth', 'itemRadius', 'itemStyle'];
+      for (let i = 0; i < boxOptionNames.length; ++i)
+       if (visualSpecs?.[boxOptionNames[i]] != null)
+        boxDataset[boxOptionNames[i]] = visualSpecs[boxOptionNames[i]];
+      return this;
+    }
     
    this.addPie=function(dataset
                        ,labels /*labelFull, labelSimple*/
@@ -873,10 +1011,10 @@ FloriaCharts2.Chart = function(divId)
       return this;
     }
     
-   this.setFancyLabeling = function(showLabel, showValue, showPct, pctPrecision)
+   this.setFancyLabeling = function(showLabel, showValue, showPct, pctPrecision, labelColorFunc, labelOptions=null)
     {
       if (showLabel || showValue || showPct)
-       this._fancyLabels = {showLabel, showValue, showPct, pctPrecision};
+       this._fancyLabels = {showLabel, showValue, showPct, pctPrecision, labelColorFunc, labelOptions};
       else
        this._fancyLabels = null;
        
@@ -1109,6 +1247,8 @@ FloriaCharts2.Chart = function(divId)
              }
           }
        }
+        if (this._boxPlotLabels != null)
+         config.data.labels = this._boxPlotLabels;
       if (this._xAxis != null)
        config.options.scales.x = this._xAxis;
       if (this._yAxis != null)
@@ -1131,7 +1271,7 @@ FloriaCharts2.Chart = function(divId)
       if (this._fancyLabels != null)
        {
          let datalabels = {
-                color:'#444'
+                color: this._fancyLabels.labelColorFunc || '#444'
                ,padding: 0
                ,textAlign: 'center'
                ,labels: { }
@@ -1139,11 +1279,11 @@ FloriaCharts2.Chart = function(divId)
 
         if (this._fancyLabels.showLabel)
          datalabels.labels.index = {
-             align: 'end'
-            ,anchor: 'end'
-            ,offset: 10
-            ,display: 'auto'
-            ,font: { weight: 'bold', size:14 }
+             align: this._fancyLabels.labelOptions?.align || 'end'
+            ,anchor: this._fancyLabels.labelOptions?.anchor || 'end'
+            ,offset: this._fancyLabels.labelOptions?.offset != null ? this._fancyLabels.labelOptions.offset : 10
+            ,display: this._fancyLabels.labelOptions?.display || 'auto'
+            ,font: { weight: 'bold', size:this._fancyLabels.labelOptions?.fontSize || 14 }
             ,formatter: function(value, context) {
                 return context.chart.data.labels[context.dataIndex];
              }

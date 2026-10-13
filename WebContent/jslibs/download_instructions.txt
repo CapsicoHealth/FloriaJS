@@ -1,3 +1,16 @@
 
 https://cdn.jsdelivr.net/npm/date-fns@3.0.0/+esm
   -> /jslibs/date-fns-3.0.0/date-fns.esm.js
+
+Boxplot charts (all runtime files are served locally; no CDN access at runtime):
+https://registry.npmjs.org/chart.js/-/chart.js-4.5.1.tgz
+  -> /jslibs/chartjs-4.5.1/ (dist/chart.js, dist/helpers.js, dist/chunks/helpers.dataset.js)
+https://registry.npmjs.org/@sgratzl/chartjs-chart-boxplot/-/chartjs-chart-boxplot-4.4.5.tgz
+  -> /jslibs/chartjs-chart-boxplot-4.4.5/chartjs-chart-boxplot.esm.js
+https://registry.npmjs.org/@sgratzl/boxplots/-/boxplots-2.0.0.tgz
+  -> /jslibs/chartjs-boxplots-2.0.0/boxplots.esm.js
+
+The boxplot ESM imports are rewritten to Floria's local Chart.js and boxplots modules so
+the extension registers against the same Chart instance. Chart.js 4.5.1 uses the existing
+/jslibs/kurkle/color/color.esm.js (version 0.3.2). The vendored MIT license files are kept
+with each package.
