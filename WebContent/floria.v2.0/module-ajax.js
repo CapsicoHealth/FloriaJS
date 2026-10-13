@@ -24,7 +24,7 @@ const TypedArray = Object.getPrototypeOf(Uint8Array);
 
 export var FloriaAjax = {
 
-ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs, multipart)
+ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs, multipart, uploadProgressFunc)
   {
     let formData = null;
     if (postContents != null)
@@ -35,6 +35,8 @@ ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, t
         if (typeof postContents == "string")
          formData = postContents;
         else if (postContents instanceof FormData)
+         formData = postContents;
+        else if (postContents instanceof Blob) // File extends Blob: sent as the raw request body
          formData = postContents;
         else if (multipart == true)
          {
@@ -69,10 +71,16 @@ ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, t
     let xhr = new XMLHttpRequest();
     xhr.open(method, url);
     xhr.timeout = timeout;
+    if (typeof uploadProgressFunc === "function" && xhr.upload != null)
+     xhr.upload.addEventListener("progress", function(event) {
+       uploadProgressFunc(event.lengthComputable && event.total > 0 ? Math.min(100, Math.round(event.loaded / event.total * 100)) : null, event);
+     });
     if (multipart != true)
      {
        if (typeof formData == "string")
         xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded; charset=UTF-8;');
+       else if (formData instanceof Blob)
+        xhr.setRequestHeader('Content-type', 'application/octet-stream');
        else
         xhr.setRequestHeader("Content-type", "application/"+handleAs+"; charset=UTF-8;");
      }
@@ -113,7 +121,7 @@ ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, t
            {
 //             return alert("NO ACL!");
              return FloriaLogin.PopupLogin.show(true, function() {
-                  FloriaAjax.ajaxUrl(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs);
+                   FloriaAjax.ajaxUrl(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs, multipart, uploadProgressFunc);
              });
            }
           else
@@ -155,7 +163,7 @@ ajaxUrl: function(url, method, errorMsg, successFunc, errorFunc, postContents, t
   },
   
 // Async wrapper for ajaxUrl using Promises
-ajaxUrlAsync: function(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs, multipart) {
+ajaxUrlAsync: function(url, method, errorMsg, successFunc, errorFunc, postContents, timeout, handleAs, multipart, uploadProgressFunc) {
     return new Promise((resolve, reject) => {
       FloriaAjax.ajaxUrl(url, method, errorMsg, function(data) {
           if (typeof successFunc === 'function')
@@ -169,7 +177,7 @@ ajaxUrlAsync: function(url, method, errorMsg, successFunc, errorFunc, postConten
               return resolve(res);
            }
           reject({ errCode, msg, errors, type });
-        }, postContents, timeout, handleAs, multipart);
+        }, postContents, timeout, handleAs, multipart, uploadProgressFunc);
     });
   },
   
