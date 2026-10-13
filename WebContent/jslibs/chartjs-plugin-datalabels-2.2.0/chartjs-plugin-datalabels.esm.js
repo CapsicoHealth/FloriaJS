@@ -4,8 +4,8 @@
  * (c) 2017-2022 chartjs-plugin-datalabels contributors
  * Released under the MIT license
  */
-import { isNullOrUndef, merge, toFont, resolve, toPadding, valueOrDefault, callback, isObject, each } from '/static/jslibs/chartjs-4.4.3/helpers.js';
-import { defaults as defaults$1, ArcElement, PointElement, BarElement } from '/static/jslibs/chartjs-4.4.3/chart.js';
+import { isNullOrUndef, merge, toFont, resolve, toPadding, valueOrDefault, callback, isObject, each } from '/static/jslibs/chartjs-4.5.1/helpers.js';
+import { defaults as defaults$1, ArcElement, PointElement, BarElement } from '/static/jslibs/chartjs-4.5.1/chart.js';
 
 var devicePixelRatio = (function() {
   if (typeof window !== 'undefined') {

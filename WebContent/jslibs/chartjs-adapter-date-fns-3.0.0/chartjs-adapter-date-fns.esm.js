@@ -4,7 +4,7 @@
  * (c) 2022 chartjs-adapter-date-fns Contributors
  * Released under the MIT license
  */
-import { _adapters } from "/static/jslibs/chartjs-4.4.3/chart.js";
+import { _adapters } from "/static/jslibs/chartjs-4.5.1/chart.js";
 
 import * as dateFns from '/static/jslibs/date-fns-3.0.0/date-fns.esm.js';
 const { toDate, parse, parseISO, isValid, format, addYears, addQuarters, addMonths, addWeeks, addDays, addHours, addMinutes, addSeconds, addMilliseconds, differenceInYears, differenceInQuarters, differenceInMonths, differenceInWeeks, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds, differenceInMilliseconds, startOfYear, startOfQuarter, startOfMonth, startOfWeek, startOfDay, startOfHour, startOfMinute, startOfSecond, endOfYear, endOfQuarter, endOfMonth, endOfWeek, endOfDay, endOfHour, endOfMinute, endOfSecond } = dateFns;
