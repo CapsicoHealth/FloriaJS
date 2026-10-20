@@ -237,8 +237,11 @@ jsonSyncFetch: async function(url, strict, raw, noThrow)
       if (response.ok == false)
        {
          if (response.status == 401 && FloriaLogin.PopupLogin.isAuthPassthrough(url) == false)
-          return alert("Your session timed out. Please refresh this page to continue.");
-  //        return FloriaLogin.PopupLogin.show(true, function() { FloriaAjax.jsonSyncFetch(url, strict, raw, noThrow) });
+          return new Promise((resolve, reject) => {
+            FloriaLogin.PopupLogin.show(true, function() {
+              FloriaAjax.jsonSyncFetch(url, strict, raw, noThrow).then(resolve, reject);
+            });
+          });
   
          let msg = "The json URL '"+url+"' could not be fetched: "+response.status+" "+response.statusText;
          if (noThrow == true)
