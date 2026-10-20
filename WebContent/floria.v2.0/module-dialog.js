@@ -1214,12 +1214,14 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
 /**
  * FloriaPromptDialog
  * A self-contained, framework-independent modal <dialog> that asks the user
- * for a single text value and calls a callback when confirmed.
+ * for a single text value or selection and calls a callback when confirmed.
  *
  * @param {string}   title       - Heading shown inside the dialog
  * @param {string}   buttonName  - Label on the confirm button (e.g. "Rename", "Save")
  * @param {Function} onConfirm   - async (value: string) => void
  *                                 Called only when the user confirms with a non-empty value.
+ * @param {Object}   [options]   - Optional configuration. `choices: [{value, label}]` renders
+ *                                 a dropdown instead of the default text input.
  *
  * @example
  *   const dlg = new FloriaPromptDialog('Rename', 'Rename', async (newName) => {
@@ -1229,17 +1231,18 @@ export function FloriaTabs(elementId, tabs, singleDiv, managingFunc, trashcan, s
  */
 export class FloriaPromptDialog {
 
-  constructor(title, buttonName, onConfirm) {
+  constructor(title, buttonName, onConfirm, options) {
     this._title      = title;
     this._btnName    = buttonName;
     this._onConfirm  = onConfirm;
+    this._choices    = Array.isArray(options?.choices) ? options.choices : null;
     // Stable IDs — unique per instance so multiple dialogs can coexist
     this._uid = 'fpd_' + Math.random().toString(36).slice(2, 9);
   }
 
   /**
    * Opens the dialog modally.
-   * @param  {string} [initialValue=''] - Pre-filled text in the input
+   * @param  {string} [initialValue=''] - Pre-filled input text or selected choice value
    * @returns {Promise<void>}            Resolves when the dialog is closed (either way)
    */
   show(initialValue = '') {
@@ -1247,6 +1250,24 @@ export class FloriaPromptDialog {
       const uid    = this._uid;
       const inputId = uid + '_input';
       const okId    = uid + '_ok';
+      const isSelect = this._choices != null;
+      const choiceValues = isSelect ? this._choices.map(function(choice) { return String(choice.value); }) : [];
+      const selectedValue = isSelect
+        ? (choiceValues.includes(String(initialValue)) ? String(initialValue) : (choiceValues[0] || ''))
+        : '';
+      const fieldMarkup = isSelect
+        ? '<select id="' + inputId + '" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;'
+          + 'border-radius:6px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color 0.15s;">'
+          + this._choices.map(function(choice) {
+              const value = String(choice.value);
+              return '<option value="' + _escFpd(value) + '" ' + (value === selectedValue ? 'selected' : '') + '>'
+                   + _escFpd(choice.label) + '</option>';
+            }).join('')
+          + '</select>'
+        : '<input id="' + inputId + '" type="text" value="' + _escFpd(initialValue) + '"'
+          + ' style="width:100%;padding:8px 10px;border:1px solid #d1d5db;'
+          + 'border-radius:6px;font-size:14px;box-sizing:border-box;'
+          + 'outline:none;transition:border-color 0.15s;" placeholder="…" />';
 
       const dlg = document.createElement('dialog');
       dlg.id = uid + '_dlg';
@@ -1267,12 +1288,7 @@ export class FloriaPromptDialog {
         <form method="dialog" style="margin:0;">
           <div style="padding:20px 20px 16px 20px;">
             <div style="font-weight:600;font-size:15px;margin-bottom:14px;">${_escFpd(this._title)}</div>
-            <input id="${inputId}" type="text"
-                   value="${_escFpd(initialValue)}"
-                   style="width:100%;padding:8px 10px;border:1px solid #d1d5db;
-                          border-radius:6px;font-size:14px;box-sizing:border-box;
-                          outline:none;transition:border-color 0.15s;"
-                   placeholder="…" />
+            ${fieldMarkup}
           </div>
           <div style="display:flex;justify-content:flex-end;gap:8px;
                       padding:12px 20px;border-top:1px solid #f3f4f6;
@@ -1356,7 +1372,9 @@ export class FloriaPromptDialog {
       });
 
       dlg.showModal();
-      inp.select();
+      inp.focus();
+      if (!isSelect)
+       inp.select();
     });
   }
 }
