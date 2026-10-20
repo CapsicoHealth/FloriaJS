@@ -121,3 +121,11 @@ FloriaSVGIcons.ICONS.STETHOSCOPE = (title, color=FloriaSVGIcons.COLORS.gray, siz
   <circle cx="20" cy="10" r="2"/>
 `, title, color, size);
 
+// PDF (document with folded corner and a "PDF" label)
+FloriaSVGIcons.ICONS.PDF = (title, color=FloriaSVGIcons.COLORS.warningOrange, size) => svgWrapper(`
+  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+  <polyline points="14 2 14 8 20 8"/>
+  <path d="M7.5 17v-4h1.3a1.2 1.2 0 0 1 0 2.4H7.5"/>
+  <path d="M11.5 13v4h.9a2 2 0 0 0 0-4z"/>
+  <path d="M16.5 17v-4h1.8M16.5 15h1.4"/>
+`, title, color, size);
