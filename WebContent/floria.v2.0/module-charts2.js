@@ -693,6 +693,67 @@ FloriaCharts2.chart = function(containerDivId, title, titleFontSize, titleFontWe
 
 const CHART_REGISTRY = { };
 
+/**
+ * Shows a small centered progress overlay (/static/img/progress.gif, 50px) over the chart container, lets the
+ * browser paint it, runs `workFn` (which may be sync or return a promise), then removes the overlay. Used to give
+ * feedback on slow chart updates (big datasets). Re-entrant: overlapping calls keep one overlay until all finish.
+ * `active === false` runs workFn immediately with no overlay (small charts keep their old synchronous behavior).
+ * Returns a promise for the result of workFn (or workFn's own return value when inactive).
+ * `minVisibleMs` (optional, default 0): keep the overlay on screen for at least this long after it was painted, so a
+ * fast update (a few hundred ms) still gives visible feedback instead of a flash nobody can see. The returned promise
+ * does NOT wait for it.
+ */
+const _BUSY_DEPTH = { };
+FloriaCharts2.runWithBusyIndicator = function(containerDivId, workFn, active, minVisibleMs)
+ {
+   let el = document.getElementById(containerDivId);
+   if (active === false || el == null)
+    return workFn();
+   _BUSY_DEPTH[containerDivId] = (_BUSY_DEPTH[containerDivId] || 0) + 1;
+   let overlayId = containerDivId + '_BUSY';
+   if (document.getElementById(overlayId) == null)
+    {
+      if (getComputedStyle(el).position === 'static')
+       el.style.position = 'relative';
+      let o = document.createElement('div');
+      o.id = overlayId;
+      o.style.cssText = 'position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;z-index:50;pointer-events:none;opacity:.8;';
+      o.innerHTML = '<IMG src="/static/img/progress.gif" style="width:50px;height:50px;">';
+      el.appendChild(o);
+    }
+   let paintedAt = performance.now();
+   let finish = function()
+    {
+      --_BUSY_DEPTH[containerDivId];
+      let remove = function()
+       {
+         if ((_BUSY_DEPTH[containerDivId] || 0) <= 0)   // a newer call may have started meanwhile: it owns the overlay now
+          {
+            _BUSY_DEPTH[containerDivId] = 0;
+            document.getElementById(overlayId)?.remove();
+          }
+       };
+      let wait = (minVisibleMs || 0) - (performance.now() - paintedAt);
+      if (wait > 0)
+       setTimeout(remove, wait);
+      else
+       remove();
+    };
+   return new Promise(function(resolve, reject) {
+      requestAnimationFrame(function() {      // let the overlay paint before the (blocking) work starts
+       requestAnimationFrame(function() {     // 2nd frame: a single rAF + setTimeout(0) can run BEFORE the browser actually paints
+         paintedAt = performance.now();
+         setTimeout(function() {
+            let r;
+            try { r = workFn(); }
+            catch (e) { finish(); reject(e); return; }
+            Promise.resolve(r).then(function(v) { finish(); resolve(v); }, function(e) { finish(); reject(e); });
+         }, 0);
+       });
+      });
+    });
+ }
+
 
 FloriaCharts2.Chart = function(divId)
  {
@@ -727,6 +788,17 @@ FloriaCharts2.Chart = function(divId)
        this._commonVisualSpecsHover = visualSpecsHover;
        return this;
      }
+
+   /**
+    * Opt-in (scatter/bubble charts only). When the total number of points across all datasets is at least
+    * `threshold`, draw() sets Chart.js parsing:false and normalized:true and disables the intro animation.
+    * The caller must supply numeric {x,y} points sorted by ascending x. Default: off (existing behavior).
+    */
+   this.setLargeDatasetMode = function(threshold)
+    {
+      this._largeDatasetThreshold = threshold;
+      return this;
+    }
 
    this.setInteractionMode = function(mode /*'index','nearest','dataset','point','x','y'*/, intersect)
     {
@@ -1177,6 +1249,19 @@ FloriaCharts2.Chart = function(divId)
              const c = legend.chart;
              const index = item.datasetIndex;
              const ds = c.data.datasets[index];
+             // Large charts: Chart.js's show()/hide() each run a full (animated) update, and the handler
+             // then ran a second one. Flip the visibility flag and do ONE update with no animation.
+             let totalPoints = 0;
+             for (let k = 0; k < c.data.datasets.length; ++k)
+              totalPoints += c.data.datasets[k].data?.length || 0;
+             if (totalPoints >= 5000)
+              {
+                FloriaCharts2.runWithBusyIndicator(c.canvas.id.replace(/_CNVS$/, ''), function() {
+                   c.setDatasetVisibility(index, !c.isDatasetVisible(index));
+                   c.update('none');
+                 }, true, 600);  // keep the overlay visible long enough to be noticed
+                return;
+              }
              if (c.isDatasetVisible(index) == false)
               {
                 legend.chart.show(index);
@@ -1318,6 +1403,18 @@ FloriaCharts2.Chart = function(divId)
       if (config.options.scales.x?.vertical == true)
        config.options.indexAxis = 'y';
 
+      // Opt-in large-dataset mode (see setLargeDatasetMode): skip Chart.js's per-point parsing and the
+      // intro animation. Requires every dataset's data to be {x:number, y:number,...} points sorted by
+      // ascending x (Chart.js assumes that when parsing is off).
+      let large = this._largeDatasetThreshold != null
+                  && this._datasets.reduce(function(n, ds) { return n + (ds.data?.length || 0); }, 0) >= this._largeDatasetThreshold;
+      if (large)
+       {
+         config.options.parsing = false;
+         config.options.normalized = true;
+       }
+
+
       this._chart = CHART_REGISTRY[this._divId];
       let e = document.getElementById(this._divId);
       if (this._chart != null && document.getElementById(this._divId+'_CNVS') != null)
@@ -1329,7 +1426,7 @@ FloriaCharts2.Chart = function(divId)
        }
       else
        {
-         config.options.animation.duration = 500;
+         config.options.animation.duration = large ? 0 : 500;
          let that = this;
          setTimeout(function() {
             let str = '<DIV class="chartControls">';
