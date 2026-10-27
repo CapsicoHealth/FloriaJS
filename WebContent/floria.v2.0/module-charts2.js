@@ -1259,7 +1259,7 @@ FloriaCharts2.Chart = function(divId)
                 FloriaCharts2.runWithBusyIndicator(c.canvas.id.replace(/_CNVS$/, ''), function() {
                    c.setDatasetVisibility(index, !c.isDatasetVisible(index));
                    c.update('none');
-                 }, true, 600);  // keep the overlay visible long enough to be noticed
+                 }, true, 300);  // keep the overlay visible long enough to be noticed
                 return;
               }
              if (c.isDatasetVisible(index) == false)
