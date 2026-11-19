@@ -84,10 +84,21 @@ FloriaSVGIcons.ICONS.BOOKMARK = (title, color=FloriaSVGIcons.COLORS.primary, siz
   <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
 `, title, color, size);
 
+// BOOKMARK_UPLOAD (import an unlisted item and track it)
+FloriaSVGIcons.ICONS.BOOKMARK_UPLOAD = (title, color=FloriaSVGIcons.COLORS.warningOrange, size) => svgWrapper(`
+  <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+  <path d="M9 10l3-3 3 3M12 7v6M9 14h6" stroke-width="2.5"/>
+`, title, color, size);
+
 
 FloriaSVGIcons.ICONS.BOOKMARK_FILLED = (title, color=FloriaSVGIcons.COLORS.primary, size, fill=FloriaSVGIcons.COLORS.successGreen) => svgWrapper(`
     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
 `, title, color, size, fill);
+
+// EDIT (pencil — edit an item's definition)
+FloriaSVGIcons.ICONS.EDIT = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
+  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+`, title, color, size);
 
 // DOCLIBRARY (document folder — document library / management)
 FloriaSVGIcons.ICONS.DOCLIBRARY = (title, color=FloriaSVGIcons.COLORS.primary, size) => svgWrapper(`
