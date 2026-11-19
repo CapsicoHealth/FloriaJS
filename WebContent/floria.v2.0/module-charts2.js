@@ -767,6 +767,7 @@ FloriaCharts2.Chart = function(divId)
    this._tooltip = null;
    this._legend = null;
    this._chart = null;
+   this._drawTimer = null;
    this._xMarker = null;
   this._boxPlotLabels = null;
     
@@ -1314,6 +1315,9 @@ FloriaCharts2.Chart = function(divId)
 
    this.draw=function(padding)
     {
+      if (this._drawTimer != null)
+       clearTimeout(this._drawTimer);
+      this._drawTimer = null;
       let config = {
          data: { datasets: this._datasets }
         ,options: {
@@ -1345,9 +1349,11 @@ FloriaCharts2.Chart = function(divId)
 
       if (this._pieAttrs != null)
        {
-         config.options.cutout = this._pieAttrs.cutout
-         config.options.circumference = this._pieAttrs.circumference
-         config.options.rotation = this._pieAttrs.rotation
+         // Null overrides Chart.js defaults instead of falling back to them. In particular,
+         // a null circumference becomes zero radians and makes a full pie invisible.
+         if (this._pieAttrs.cutout != null) config.options.cutout = this._pieAttrs.cutout;
+         if (this._pieAttrs.circumference != null) config.options.circumference = this._pieAttrs.circumference;
+         if (this._pieAttrs.rotation != null) config.options.rotation = this._pieAttrs.rotation;
        }
        
       if (this._piePolarRadarLabels != null)
@@ -1428,7 +1434,9 @@ FloriaCharts2.Chart = function(divId)
        {
          config.options.animation.duration = large ? 0 : 500;
          let that = this;
-         setTimeout(function() {
+         this._drawTimer = setTimeout(function() {
+            that._drawTimer = null;
+            if (document.getElementById(that._divId) !== e) return;
             let str = '<DIV class="chartControls">';
             if (that._selectOptions != null)
              {
@@ -1514,10 +1522,17 @@ FloriaCharts2.Chart = function(divId)
 
    this.destroy=function()
     {
+      if (this._drawTimer != null)
+       {
+         clearTimeout(this._drawTimer);
+         this._drawTimer = null;
+       }
       if (this._chart != null)
        {
          this._chart.destroy();
-         delete CHART_REGISTRY[this._divId];
+         if (CHART_REGISTRY[this._divId] === this._chart)
+          delete CHART_REGISTRY[this._divId];
+         this._chart = null;
        }
     }    
 };
